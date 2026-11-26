@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><style>body{font:16px/1.4 monospace;margin:10px;white-space:pre}</style></head>
+<body><div id="out">läuft…</div>
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/solver-common.js"></script>
+<script>
+(function () {
+  var C = ZW.Cube, S = ZW.SolverCommon;
+  var CORNER = S.CORNER, EDGE = S.EDGE;
+  var CROSS = [5, 4, 7, 6], L1CORNERS = [4, 5, 6, 7], MID = [8, 9, 10, 11];
+  var TOPE = [0, 1, 2, 3], TOPC = [0, 1, 2, 3];
+
+  var r = 987654321;
+  function scramble(n) {
+    var st = new C.State(), last = -1;
+    for (var i = 0; i < n; i++) {
+      r = (r * 1103515245 + 12345) & 0x7fffffff;
+      var m = (r >>> 8) % 18;
+      if (last >= 0 && C.MOVE_FACE[m] === C.MOVE_FACE[last]) { i--; continue; }
+      last = m; C.applyMoveIdx(st, m);
+    }
+    return st;
+  }
+  function mv(letters) {
+    var out = [];
+    ['U', 'R', 'F', 'D', 'L', 'B'].forEach(function (L) {
+      if (letters.indexOf(L) < 0) return;
+      out.push(C.moveIndex(L, 1), C.moveIndex(L, 2), C.moveIndex(L, 3));
+    });
+    return out;
+  }
+  var ALL = mv('URFDLB'), TOPAL = mv('UFR');
+  function alphFor(kind, id) {
+    var faces = kind === CORNER ? C.CORNER_HOME_FACES[id] : C.EDGE_HOME_FACES[id];
+    var letters = ['U'];
+    faces.forEach(function (f) {
+      var L = C.FACES[f];
+      if (L !== 'U' && letters.indexOf(L) < 0) letters.push(L);
+    });
+    return mv(letters.join(''));
+  }
+  function listOf(ids, kind, mode) {
+    return ids.map(function (id) { return { kind: kind, id: id, mode: mode }; });
+  }
+
+  /* prüft, ob eine geplante Folge auf dem echten Würfel wirkt */
+  function plan(label, st, cfg) {
+    var t0 = performance.now();
+    var seq = S.piecePlan(st, cfg);
+    var ms = Math.round(performance.now() - t0);
+    if (seq === null) { T.info(label + ': KEINE Lösung (' + ms + ' ms)'); return null; }
+    var after = st.clone();
+    S.applySeq(after, seq);
+    var items = [{ kind: cfg.piece.kind, id: cfg.piece.id, mode: cfg.piece.mode }]
+      .concat(cfg.keep || []);
+    for (var i = 0; i < items.length; i++) {
+      if (!S.pieceSatisfied(after, items[i].kind, items[i].id, items[i].mode)) {
+        T.info(label + ': VERLETZT ' + items[i].kind + items[i].id + ' [' + S.seqKey(seq) + ']');
+        return null;
+      }
+    }
+    T.info(label + ': ' + S.seqKey(seq) + '  (' + seq.length + ' Züge, ' + ms + ' ms)');
+    return seq;
+  }
+
+  /* 0) Übergangstabellen müssen zum Würfelmodell passen */
+  var tabBad = 0, tabChecks = 0;
+  for (var t = 0; t < 12; t++) {
+    var base = scramble(12);
+    for (var mm = 0; mm < 18; mm++) {
+      var after2 = base.clone();
+      C.applyMoveIdx(after2, mm);
+      for (var ci = 0; ci < 8; ci++) {
+        var c1 = S.pieceCoord(base, CORNER, ci), c2 = S.pieceCoord(after2, CORNER, ci);
+        tabChecks++;
+        if (S.CORNER_STEP[mm][c1] !== c2) tabBad++;
+      }
+      for (var ei = 0; ei < 12; ei++) {
+        var d1 = S.pieceCoord(base, EDGE, ei), d2 = S.pieceCoord(after2, EDGE, ei);
+        tabChecks++;
+        if (S.EDGE_STEP[mm][d1] !== d2) tabBad++;
+      }
+    }
+  }
+  T.log('Stein-Übergangstabellen stimmen mit dem Modell überein (' + tabChecks + ' Prüfungen)', tabBad === 0);
+  if (tabBad) T.info('  Abweichungen: ' + tabBad);
+
+  /* erreichbare Koordinaten eines Steins = 24 physikalische Lagen */
+  var reach = 0, maxd = 0, hd = S.homeDist(EDGE, 5);
+  for (var i2 = 0; i2 < hd.length; i2++) if (hd[i2] >= 0) { reach++; if (hd[i2] > maxd) maxd = hd[i2]; }
+  T.info('Kante DF: ' + reach + ' erreichbare Koordinaten, weiteste Entfernung ' + maxd);
+  T.log('Genau 24 Lagen erreichbar', reach === 24);
+
+  /* 1) Macro-Bibliotheken: Größe und Bauzeit */
+  var t0 = performance.now();
+  var lib1 = S.macroLib({ alphabet: ALL, len: 6, keep: [], target: { kind: EDGE, id: 5, mode: 'home' }, pull: true });
+  var t1 = performance.now();
+  T.info('Bibliothek Kreuz (alle Züge, len 6): ' + lib1.length + ' Folgen, ' + Math.round(t1 - t0) + ' ms');
+
+  var keepCross = listOf([4, 7, 6], EDGE, 'home');
+  var t2 = performance.now();
+  var lib2 = S.macroLib({ alphabet: mv('UFR'), len: 8, keep: keepCross, target: { kind: EDGE, id: 5, mode: 'home' }, pull: true });
+  var t3 = performance.now();
+  T.info('Bibliothek Kreuz geschützt (UFR, len 8): ' + lib2.length + ' Folgen, ' + Math.round(t3 - t2) + ' ms');
+
+  var keepL1 = listOf(CROSS, EDGE, 'home');
+  var lib3 = S.macroLib({ alphabet: alphFor(CORNER, 4), len: 8, keep: keepL1, target: { kind: CORNER, id: 4, mode: 'home' }, pull: true });
+  T.info('Bibliothek Ecke unten (eigenes Alphabet, len 8): ' + lib3.length + ' Folgen');
+
+  var keepL12 = listOf(CROSS.concat(MID), EDGE, 'home').concat(listOf(L1CORNERS, CORNER, 'home'));
+  var t4 = performance.now();
+  var lib4 = S.macroLib({ alphabet: alphFor(EDGE, 8), len: 9, keep: keepL12, target: { kind: EDGE, id: 8, mode: 'home' }, pull: true });
+  var t5 = performance.now();
+  T.info('Bibliothek Mittelkante (len 9, 8 geschützt): ' + lib4.length + ' Folgen, ' + Math.round(t5 - t4) + ' ms');
+
+  /* 2) Einzelne Steine auf Zufallswürfeln (ohne Schutz anderer Steine) */
+  var ok = 0, tries = 0;
+  for (var k = 0; k < 4; k++) {
+    var st = scramble(20);
+    tries++;
+    if (plan('Kreuz ' + k, st, { piece: { kind: EDGE, id: CROSS[k], mode: 'home' }, keep: [], alphabet: ALL, macroLen: 6, levels: 2 })) ok++;
+    tries++;
+    if (plan('Ecke unten ' + k, st, {
+      piece: { kind: CORNER, id: L1CORNERS[k], mode: 'home' },
+      keep: [], alphabet: alphFor(CORNER, L1CORNERS[k]), macroLen: 8, levels: 3
+    })) ok++;
+  }
+  T.log('Einzelne Steine gelöst: ' + ok + '/' + tries, ok === tries);
+
+  /* 3) Ganze Ebenen: Kreuz, Ecken, Mittelkanten nacheinander */
+  var layerOk = 0, layerTries = 0, layerMs = 0;
+  for (var s = 0; s < 4; s++) {
+    var st2 = scramble(25), keep = [], okBuild = true, a0 = performance.now();
+    var order = listOf(CROSS, EDGE, 'home')
+      .concat(listOf(L1CORNERS, CORNER, 'home'))
+      .concat(listOf(MID, EDGE, 'home'));
+    for (var j = 0; j < order.length && okBuild; j++) {
+      var it = order[j];
+      // wie im Löser: erst das enge Alphabet, sonst alle Züge
+      var sq = S.piecePlan(st2, {
+        piece: it, keep: keep, alphabet: alphFor(it.kind, it.id), macroLen: 9
+      });
+      if (sq === null) sq = S.piecePlan(st2, {
+        piece: it, keep: keep, alphabet: ALL, macroLen: 9
+      });
+      if (sq === null) { okBuild = false; T.info('Ebene-Fall ' + s + ': kein Plan für ' + it.kind + it.id); break; }
+      S.applySeq(st2, sq);
+      keep.push(it);
+    }
+    layerMs += performance.now() - a0;
+    if (okBuild) {
+      for (var v = 0; v < keep.length; v++) {
+        if (!S.pieceAtHome(st2, keep[v].kind, keep[v].id)) { okBuild = false; T.info('Ebene-Fall ' + s + ': ' + keep[v].id + ' nicht heil'); }
+      }
+    }
+    layerTries++;
+    if (okBuild) layerOk++;
+    T.info('Ebene-Fall ' + s + ': ' + (okBuild ? 'ok' : 'fehlgeschlagen'));
+  }
+  T.log('Erste zwei Ebenen: ' + layerOk + '/' + layerTries + ' Fälle, Ø ' +
+        Math.round(layerMs / layerTries) + ' ms', layerOk === layerTries);
+
+  /* 4) Orientierung oben nach gelösten Ebenen 1-2 */
+  var o1 = 0, o2 = 0, oTries = 0;
+  for (var q = 0; q < 3; q++) {
+    var st3 = scramble(30), kp = [], okB = true;
+    var order2 = listOf(CROSS, EDGE, 'home').concat(listOf(L1CORNERS, CORNER, 'home')).concat(listOf(MID, EDGE, 'home'));
+    for (var z = 0; z < order2.length && okB; z++) {
+      var sq3 = S.piecePlan(st3, { piece: order2[z], keep: kp, alphabet: alphFor(order2[z].kind, order2[z].id), macroLen: 9 });
+      if (sq3 === null) sq3 = S.piecePlan(st3, { piece: order2[z], keep: kp, alphabet: ALL, macroLen: 9 });
+      if (sq3 === null) { okB = false; break; }
+      S.applySeq(st3, sq3); kp.push(order2[z]);
+    }
+    if (!okB) { T.info('Orientierung Fall ' + q + ': Aufbau fehlgeschlagen'); continue; }
+    oTries++;
+    var sqe = S.piecePlan(st3, { piece: { kind: EDGE, id: TOPE[0], mode: 'orient' }, keep: kp, alphabet: TOPAL, macroLen: 9, levels: 2 });
+    if (sqe !== null) {
+      S.applySeq(st3, sqe);
+      if (S.isOrientedEdge(st3, TOPE[0])) o1++;
+      var sqc = S.piecePlan(st3, {
+        piece: { kind: CORNER, id: TOPC[0], mode: 'orient' },
+        keep: kp.concat(listOf(TOPE, EDGE, 'orient')), alphabet: TOPAL, macroLen: 9, levels: 2
+      });
+      if (sqc !== null) { S.applySeq(st3, sqc); if (S.isOrientedCorner(st3, TOPC[0])) o2++; }
+    } else T.info('Kreuz oben Fall ' + q + ': kein Plan');
+  }
+  T.log('Kreuz oben: ' + o1 + '/' + oTries, o1 === oTries);
+  T.log('Ecke oben: ' + o2 + '/' + oTries, o2 === oTries);
+  T.done();
+})();
+</script>
+</body></html>
