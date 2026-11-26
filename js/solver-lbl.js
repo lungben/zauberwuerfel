@@ -334,7 +334,7 @@
         steps.push({
           move: C.MOVE_NAMES[typeof moves[i] === 'number' ? moves[i] : C.moveIndexOf(moves[i])],
           phase: meta.phase, title: meta.title, text: i === 0 ? meta.text : '',
-          alg: S.seqKey(moves), piece: meta.piece
+          alg: S.seqKey(moves), piece: meta.piece, kind: meta.kind, id: meta.id
         });
       }
     }
@@ -429,7 +429,8 @@
 
         addMoves(seq, {
           phase: phase.n, title: 'Phase ' + phase.n,
-          text: stepText(phase, before, targetId, seq), piece: label
+          text: stepText(phase, before, targetId, seq), piece: label,
+          kind: phase.kind, id: targetId
         });
         S.applySeq(st, seq);
       }

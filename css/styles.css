@@ -1,0 +1,228 @@
+/* Zauberwürfel — ruhiges dunkles Layout, big stage, Panel rechts */
+
+:root {
+  --bg: #0e1118;
+  --flaeche: #171c26;
+  --feld: #1e2531;
+  --text: #e8ecf3;
+  --text-ab: #9aa6b8;
+  --kante: #2a3342;
+  --akzent: #3d84ff;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, "Segoe UI", Roboto, Ubuntu, sans-serif;
+}
+
+/* --------------------------------------------------------------- Kopf */
+
+.kopf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px;
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid var(--kante);
+}
+.kopf h1 { margin: 0; font-size: 1.35rem; letter-spacing: .02em; }
+.kopf .kurz { margin: 0; color: var(--text-ab); font-size: .9rem; flex: 1 1 200px; }
+
+.modus { display: flex; gap: 6px; }
+.modus button {
+  background: var(--feld);
+  border: 1px solid var(--kante);
+  color: var(--text-ab);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.modus button.an { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+
+/* ------------------------------------------------------- Bühne & Seite */
+
+.bereich {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 400px);
+  gap: 16px;
+  padding: 16px 20px 28px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .bereich { grid-template-columns: 1fr; }
+}
+
+.buehne {
+  position: relative;
+  background: radial-gradient(circle at 50% 40%, #1c2431, #10141c 70%);
+  border: 1px solid var(--kante);
+  border-radius: var(--radius);
+  min-height: 420px;
+  height: min(66vh, 640px);
+  display: flex;
+  flex-direction: column;
+}
+#buehne {
+  flex: 1;
+  width: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#buehne:active { cursor: grabbing; }
+
+.buehne-unten {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--kante);
+  font-size: .85rem;
+  color: var(--text-ab);
+}
+.zaehler { display: flex; gap: 14px; flex-wrap: wrap; }
+.zaehler b { color: var(--text); font-variant-numeric: tabular-nums; }
+.scramble {
+  flex: 1 1 200px;
+  text-align: right;
+  color: var(--text-ab);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: .78rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.banner {
+  position: absolute;
+  inset: 12px 12px auto 12px;
+  background: #4a2415;
+  border: 1px solid #7c3a22;
+  color: #ffe3d5;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: .9rem;
+  z-index: 3;
+}
+.versteckt { display: none; }
+
+/* ------------------------------------------------------------- Seite */
+
+.seite { display: flex; flex-direction: column; gap: 14px; }
+
+.gruppe { display: flex; gap: 8px; flex-wrap: wrap; }
+.gruppe.haupt button { flex: 1 1 120px; }
+
+button {
+  background: var(--feld);
+  color: var(--text);
+  border: 1px solid var(--kante);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { background: #26303f; }
+button:active { transform: translateY(1px); }
+button.groß { padding: 13px 14px; font-weight: 600; }
+button.akzent { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+button.akzent:hover { background: #4f90ff; }
+
+.wiedergabe { align-items: center; }
+.wiedergabe .breit { flex: 1 1 120px; }
+.tempo { color: var(--text-ab); font-size: .85rem; display: flex; align-items: center; gap: 6px; }
+select {
+  background: var(--feld);
+  color: var(--text);
+  border: 1px solid var(--kante);
+  border-radius: 6px;
+  padding: 7px 8px;
+  font: inherit;
+}
+
+.box {
+  border: 1px solid var(--kante);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--flaeche);
+}
+.box summary { cursor: pointer; color: var(--text-ab); font-size: .9rem; }
+.box[open] summary { margin-bottom: 10px; }
+
+/* -------------------------------------------------------- Erklärung */
+
+.erklaerung {
+  background: var(--flaeche);
+  border: 1px solid var(--kante);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  min-height: 120px;
+}
+.erklaerung h2 { margin: 0 0 6px; font-size: 1rem; }
+.erklaerung p { margin: 0 0 8px; }
+#phasen-text { color: #d6dde8; }
+.zug-info {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--akzent);
+  font-weight: 600;
+}
+.klein { color: var(--text-ab); font-size: .8rem; }
+
+.fortschritts-leiste {
+  height: 5px;
+  background: var(--feld);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+#fortschritt {
+  height: 100%;
+  width: 0;
+  background: var(--akzent);
+  transition: width .25s;
+}
+
+/* ------------------------------------------------------- Zug-Buttons */
+
+.zug-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (max-width: 520px) { .zug-buttons { grid-template-columns: 1fr; } }
+.zug-gruppe {
+  border: 1px solid var(--kante);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--feld);
+}
+.zug-flaeche { display: block; color: var(--text-ab); font-size: .78rem; margin-bottom: 6px; }
+.zug-zeile { display: flex; gap: 6px; }
+.zug-zeile button { flex: 1; padding: 8px 6px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+/* ----------------------------------------------------------- Farben */
+
+.farben { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+.farbe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .85rem;
+  color: var(--text-ab);
+  background: var(--feld);
+  border: 1px solid var(--kante);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.farbe input[type="color"] {
+  width: 34px;
+  height: 26px;
+  border: 1px solid var(--kante);
+  border-radius: 6px;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.voreinstellung { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--text-ab); }
