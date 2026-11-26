@@ -12,14 +12,15 @@
     display: flex;
     flex-direction: column;
   }
-  #buehne { flex: 1; width: 100%; display: block; }
+  .leinwand { position: relative; flex: 1 1 auto; min-height: 0; }
+  #buehne { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .buehne-unten { padding: 10px 14px; border-top: 1px solid #2a3342; }
 </style>
 </head>
 <body>
 <div id="out">läuft…</div>
 <div class="buehne">
-  <canvas id="buehne"></canvas>
+  <div class="leinwand"><canvas id="buehne"></canvas></div>
   <div class="buehne-unten">selbst gedreht 0 · Löseschritte 0 · gesamt 0</div>
 </div>
 <script src="harness.js"></script>
@@ -78,22 +79,32 @@
 
   // Projektion der acht Ecken nachrechnen (Three selbst, nicht per Hand)
   var ecken = [[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1],[-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1]];
-  var px2 = 0, px1 = 0, py2 = 0, py1 = 0;
-  var v = new THREE.Vector3();
-  for (var ve = 0; ve < ecken.length; ve++) {
-    v.set(ecken[ve][0] * 1.48, ecken[ve][1] * 1.48, ecken[ve][2] * 1.48).project(view.camera);
-    var sx = (v.x + 1) * 0.5 * w, sy = (1 - v.y) * 0.5 * h;
-    if (ve === 0) { px2 = px1 = sx; py2 = py1 = sy; }
-    if (sx < px1) px1 = sx; if (sx > px2) px2 = sx;
-    if (sy < py1) py1 = sy; if (sy > py2) py2 = sy;
+  function rahmenMessen() {
+    var groesse = view.renderer.getSize(new THREE.Vector2());
+    var p = new THREE.Vector3(), x1 = 9, x2 = -9, y1 = 9, y2 = -9;
+    for (var i = 0; i < ecken.length; i++) {
+      p.set(ecken[i][0] * 1.48, ecken[i][1] * 1.48, ecken[i][2] * 1.48).project(view.camera);
+      if (p.x < x1) x1 = p.x; if (p.x > x2) x2 = p.x;
+      if (p.y < y1) y1 = p.y; if (p.y > y2) y2 = p.y;
+    }
+    return { w: groesse.x, h: groesse.y, breite: (x2 - x1) * 0.5 * groesse.x, hoehe: (y2 - y1) * 0.5 * groesse.y };
   }
-  var verhaeltnis = (px2 - px1) / (py2 - py1);
-  T.log('Würfel ist nicht verzerrt (Seitenverhältnis ' + verhaeltnis.toFixed(2) + ')',
-        verhaeltnis >= 0.75 && verhaeltnis <= 1.3);
-  T.log('Würfel füllt die Bühne (Höhe ' + Math.round((py2 - py1) / h * 100) + '% der Bildhöhe)',
-        (py2 - py1) >= h * 0.55 && (py2 - py1) <= h * 0.97 && (px2 - px1) <= w * 0.97);
+  function pruefeRahmen(label) {
+    var r = rahmenMessen(), verhaeltnis = r.breite / r.hoehe;
+    T.info(label + ': Bild ' + Math.round(r.w) + 'x' + Math.round(r.h) + ', Würfel ' +
+           Math.round(r.breite) + 'x' + Math.round(r.hoehe) + ' (' + verhaeltnis.toFixed(2) + ')');
+    T.log(label + ': Würfel unverzerrt und ganz im Bild',
+          verhaeltnis >= 0.75 && verhaeltnis <= 1.3 &&
+          r.hoehe >= r.h * 0.55 && r.hoehe <= r.h * 0.97 && r.breite <= r.w * 0.97);
+  }
+  var rahmen = rahmenMessen();
+  T.log('Würfel ist nicht verzerrt (Seitenverhältnis ' + (rahmen.breite / rahmen.hoehe).toFixed(2) + ')',
+        rahmen.breite / rahmen.hoehe >= 0.75 && rahmen.breite / rahmen.hoehe <= 1.3);
+  T.log('Würfel füllt die Bühne (Höhe ' + Math.round(rahmen.hoehe / rahmen.h * 100) + '% der Bildhöhe)',
+        rahmen.hoehe >= rahmen.h * 0.55 && rahmen.hoehe <= rahmen.h * 0.97 &&
+        rahmen.breite <= rahmen.w * 0.97);
   T.info('Kamera: fov ' + view.camera.fov + ', aspect ' + view.camera.aspect.toFixed(2) +
-         ', Abstand ' + view.orbit.radius + ', phi ' + view.orbit.phi + ', theta ' + view.orbit.theta);
+         ', Abstand ' + view.orbit.radius.toFixed(2) + ', phi ' + view.orbit.phi + ', theta ' + view.orbit.theta);
 
   var anzahl = Object.keys(farben).length;
   var hitufig = Object.keys(farben).sort(function (a, b) { return farben[b] - farben[a]; }).slice(0, 5);
@@ -205,6 +216,18 @@
   // Der Flächenmittelstein einer Ebene lässt sich per Zug nicht drehen
   var mittig = view.turnAxisFor(new THREE.Vector3(0, 1, 0), { x: 0, y: 1, z: 0 }, new THREE.Vector3(1, 0, 0));
   T.log('Flächenmittelpunkt ergibt keinen Zug', mittig === null);
+
+  /* Fenster vergrößern: die Bühne bleibt stabil, der Würfel passt sich an */
+  var huelle = document.querySelector('.leinwand');
+  huelle.style.flex = '0 0 auto';
+  huelle.style.height = '1250px';
+  view.resize();
+  var erste = huelle.getBoundingClientRect();
+  view.resize();
+  var zweite = huelle.getBoundingClientRect();
+  T.log('Wiederholtes Vergrößern bläht die Bühne nicht auf (' + Math.round(zweite.height) + ' px)',
+        Math.abs(erste.height - zweite.height) < 2 && Math.abs(zweite.height - 1250) < 2);
+  pruefeRahmen('nach dem Vergrößern');
 
   T.done();
 })();

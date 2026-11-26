@@ -83,6 +83,7 @@
     this.ray = new THREE.Raycaster();
     this.ndc = new THREE.Vector2();
     this.bindEvents();
+    this.observeLayout();
     this.resize();
     var self = this;
     this.frame = function () {
@@ -416,6 +417,16 @@
     this.camera.lookAt(0, 0, 0);
   };
 
+  /** Auf Größenänderungen der Leinwand reagieren (Fenster, Panel, Umbruch). */
+  Cube3D.prototype.observeLayout = function () {
+    if (!global.ResizeObserver) return;
+    var self = this;
+    this.resizeObserver = new ResizeObserver(function () {
+      if (!self.disposed) self.resize();
+    });
+    this.resizeObserver.observe(this.canvas.parentElement);
+  };
+
   /** Größte Ausdehnung des Würfels im Bild (in normalisierten Gerätekoordinaten). */
   Cube3D.prototype.extentNdc = function () {
     var v = new THREE.Vector3(), lim = 1.55;          // Ecken des fertigen Würfels
@@ -446,9 +457,12 @@
   };
 
   Cube3D.prototype.resize = function () {
-    var parent = this.canvas.parentElement;
-    var w = Math.max(200, parent.clientWidth);
-    var h = Math.max(200, parent.clientHeight);
+    // Größe des Layouts nehmen, nie die des Canvases: sonst regelt sich die
+    // Bühnengröße über die eigene Pixelgröße hoch.
+    var rect = this.canvas.getBoundingClientRect();
+    var messen = rect.width > 4 && rect.height > 4 ? rect : this.canvas.parentElement.getBoundingClientRect();
+    var w = Math.max(200, Math.round(messen.width));
+    var h = Math.max(200, Math.round(messen.height));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();   // ohne diesen Aufruf bleibt die Projektion quadratisch
@@ -472,7 +486,10 @@
     this.applyColors();
   };
 
-  Cube3D.prototype.dispose = function () { this.disposed = true; };
+  Cube3D.prototype.dispose = function () {
+    this.disposed = true;
+    if (this.resizeObserver) this.resizeObserver.disconnect();
+  };
 
   /** Erzeugt die Ansicht oder meldet false, wenn WebGL nicht verfügbar ist. */
   function create(canvas, handlers) {
