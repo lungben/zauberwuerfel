@@ -34,9 +34,10 @@
   var C = ZW.Cube;
 
   var fake = {
-    moves: [],
+    moves: [], lastHighlight: null,
     applyMove: function (idx) { this.moves.push(idx); },
-    highlight: function () {}, setColors: function () {}, rebuild: function () {},
+    highlight: function (list) { this.lastHighlight = list || []; },
+    setColors: function () {}, rebuild: function () {},
     flush: function () {}, busy: function () { return false; }, resize: function () {}
   };
   ZW.Cube3D = { create: function () { return fake; }, SNAP: Math.PI / 4 };
@@ -88,6 +89,8 @@
     schritt++;
   }
   T.log('Vorwärts bis zum Ende gespielt (' + schritt + ' Schritte)', C.isSolved(app.state));
+  T.log('Keine Steine bleiben nach dem Lösen markiert',
+        fake.lastHighlight !== null && fake.lastHighlight.length === 0);
   T.log('Zähler nach der Lösung: ' + app.counts.solver + ' Löseschritte',
         app.counts.solver === schritt);
 

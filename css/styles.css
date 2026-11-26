@@ -18,6 +18,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 system-ui, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* --------------------------------------------------------------- Kopf */
@@ -49,12 +52,15 @@ body {
 .bereich {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(320px, 400px);
+  grid-template-rows: minmax(420px, 1fr);
   gap: 16px;
-  padding: 16px 20px 28px;
-  align-items: start;
+  padding: 16px 20px 24px;
+  flex: 1 1 auto;
 }
+.seite { align-self: start; }
 @media (max-width: 900px) {
-  .bereich { grid-template-columns: 1fr; }
+  .bereich { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .buehne { height: 62vh; min-height: 340px; }
 }
 
 .buehne {
@@ -63,7 +69,6 @@ body {
   border: 1px solid var(--kante);
   border-radius: var(--radius);
   min-height: 420px;
-  height: min(66vh, 640px);
   display: flex;
   flex-direction: column;
 }

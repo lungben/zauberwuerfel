@@ -47,7 +47,8 @@
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#141821');
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    this.orbit = { radius: 9.2, theta: 0.7, phi: 1.15 };
+    // Etwas von oben schauen: so wirken die Steine würfelig und nicht flach.
+    this.orbit = { theta: 0.72, phi: 1.08, radius: 8, zoomed: false };
 
     // Die Flächen sollen dicht an ihren Farbwerten bleiben: Lichtsumme um 1,
     // damit Gelb nicht ausfrisst und die Schattenseite noch zu sehen ist.
@@ -286,7 +287,8 @@
     canvas.addEventListener('pointercancel', finish);
 
     canvas.addEventListener('wheel', function (ev) {
-      self.orbit.radius = Math.min(16, Math.max(5, self.orbit.radius + ev.deltaY * 0.01));
+      self.orbit.radius = Math.min(20, Math.max(4, self.orbit.radius + ev.deltaY * 0.01));
+      self.orbit.zoomed = true;          // eigene Wahl behalten, auch beim Umskalieren
       self.updateCamera();
       ev.preventDefault();
     }, { passive: false });
@@ -414,13 +416,44 @@
     this.camera.lookAt(0, 0, 0);
   };
 
+  /** Größte Ausdehnung des Würfels im Bild (in normalisierten Gerätekoordinaten). */
+  Cube3D.prototype.extentNdc = function () {
+    var v = new THREE.Vector3(), lim = 1.55;          // Ecken des fertigen Würfels
+    var span = 0;
+    var ecken = [[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1],[-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1]];
+    var minx = 9, maxx = -9, miny = 9, maxy = -9;
+    for (var i = 0; i < ecken.length; i++) {
+      v.set(ecken[i][0] * lim, ecken[i][1] * lim, ecken[i][2] * lim).project(this.camera);
+      if (v.x < minx) minx = v.x;
+      if (v.x > maxx) maxx = v.x;
+      if (v.y < miny) miny = v.y;
+      if (v.y > maxy) maxy = v.y;
+    }
+    return Math.max(maxx - minx, maxy - miny);
+  };
+
+  /** Abstand so wählen, dass der Würfel das Bild gut ausfüllt. */
+  Cube3D.prototype.fitCamera = function () {
+    var füllung = 0.88;                       // Anteil der kürzeren Bildseite
+    for (var versuch = 0; versuch < 4; versuch++) {
+      this.updateCamera();
+      var span = this.extentNdc();
+      if (span <= 0) break;
+      var ziel = 2 * füllung;
+      this.orbit.radius = Math.min(24, Math.max(3.5, this.orbit.radius * span / ziel));
+    }
+    this.updateCamera();
+  };
+
   Cube3D.prototype.resize = function () {
     var parent = this.canvas.parentElement;
     var w = Math.max(200, parent.clientWidth);
     var h = Math.max(200, parent.clientHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    this.updateCamera();
+    this.camera.updateProjectionMatrix();   // ohne diesen Aufruf bleibt die Projektion quadratisch
+    if (!this.orbit.zoomed) this.fitCamera();
+    else this.updateCamera();
   };
 
   /** Ansicht wieder in den gelösten Aufbau versetzen (nach „Zurücksetzen“). */

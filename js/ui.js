@@ -177,6 +177,7 @@
     if (this.view) {
       // Die Steine der Anzeige müssen den Mischzug nacherleben.
       this.view.flush();
+      this.view.highlight([]);
       for (var i = 0; i < res.moves.length; i++) this.view.applyMove(res.moves[i], { duration: 70 });
     }
   };
@@ -271,6 +272,7 @@
     this.dom.planInfo.textContent = '';
     if (message) this.say(message, 'Abgebrochen');
     this.dom.stepInfo.textContent = '';
+    this.refreshHighlight();
   };
 
   /* ------------------------------------------------------------ Wiedergabe */
@@ -289,6 +291,7 @@
       this.stopAuto();
       this.dom.stepInfo.textContent = 'Fertig';
       this.say('Der Würfel ist gelöst. Gut gemacht!', 'Geschafft');
+      this.refreshHighlight();
       return;
     }
     var step = steps[this.plan.pos];
@@ -296,6 +299,13 @@
     this.commit(C.moveIndexOf(step.move), 'solver', this.turnTime(230));
     this.plan.pos++;
     this.reportProgress();
+    // Ende sofort erkennen: sonst bleibt die Markierung des letzten Steins stehen
+    if (this.plan.pos >= steps.length) {
+      this.stopAuto();
+      this.dom.stepInfo.textContent = 'Fertig';
+      this.say('Der Würfel ist gelöst. Gut gemacht!', 'Geschafft');
+      this.refreshHighlight();
+    }
   };
 
   App.prototype.prevStep = function () {
