@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 16px/1.4 monospace; margin: 10px; white-space: pre; }
+  #rahmen { width: 620px; height: 420px; }
+  #bild { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<div id="out">läuft…</div>
+<div id="rahmen"><canvas id="bild"></canvas></div>
+<script src="harness.js"></script>
+<script src="../vendor/three.min.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/color-scheme.js"></script>
+<script src="../js/cube3d.js"></script>
+<script>
+(function () {
+  var C = ZW.Cube;
+
+  var view = ZW.Cube3D.create(document.getElementById('bild'), {});
+  T.log('WebGL-Ansicht erzeugt', !!view);
+  if (!view) { T.done(); return; }
+
+  T.log('26 Steine aufgebaut', view.cubies.length === 26);
+  var stickers = 0;
+  for (var i = 0; i < view.cubies.length; i++) stickers += view.cubies[i].stickers.length;
+  T.log('54 Aufkleber aufgebaut', stickers === 54);
+
+  // Ein Bild rendern und prüfen, dass es nicht einfarbig ist
+  view.step();
+  var gl = view.renderer.getContext();
+  var w = view.renderer.domElement.width, h = view.renderer.domElement.height;
+  var px = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  var farben = Object.create(null), bunt = 0;
+  for (var p = 0; p < px.length; p += 4) {
+    var key = (px[p] >> 3) + ',' + (px[p + 1] >> 3) + ',' + (px[p + 2] >> 3);
+    if (!farben[key]) { farben[key] = 0; }
+    farben[key]++;
+    var lo = Math.min(px[p], px[p + 1], px[p + 2]);
+    var hi = Math.max(px[p], px[p + 1], px[p + 2]);
+    if (hi - lo > 40) bunt++;                          // gesättigt = Aufkleber
+  }
+  var anzahl = Object.keys(farben).length;
+  var hitufig = Object.keys(farben).sort(function (a, b) { return farben[b] - farben[a]; }).slice(0, 5);
+  T.info('häufigste Farbnuancen: ' + hitufig.join(' | '));
+  T.info('gerenderte Farbnuancen: ' + anzahl + ', bunte Bildpunkte: ' + bunt);
+  T.log('Bild enthält farbige Flächen', anzahl > 6 && bunt > 5000);
+
+  // Kamerasicht: von oben rechts vorn sind U (gelb), R (orange) und F (grün) zu sehen
+  function zähle(passt) {
+    var n = 0;
+    for (var i = 0; i < px.length; i += 4) if (passt(px[i], px[i + 1], px[i + 2])) n++;
+    return n;
+  }
+  var gelb = zähle(function (r, g, b) { return r > 150 && g > 110 && b < 90; });
+  var orange = zähle(function (r, g, b) { return r > 130 && g > 40 && g < 130 && b < 70; });
+  var gruen = zähle(function (r, g, b) { return g > 90 && r < 90 && b < 110 && g - r > 40; });
+  T.info('Flächen in der Ansicht: gelb ' + gelb + ', orange ' + orange + ', grün ' + gruen);
+  T.log('Drei Flächen des Farbschemas sind zu sehen', gelb > 3000 && orange > 3000 && gruen > 3000);
+
+  // Farbpalette folgt dem Farbschema
+  view.setColors(['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#ffff00', '#ff00ff']);
+  view.step();
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  var rotAnteil = 0;
+  for (var q = 0; q < px.length; q += 4) if (px[q] > 150 && px[q + 1] < 90 && px[q + 2] < 90) rotAnteil++;
+  T.log('Farbschema wirkt in der Ansicht (' + rotAnteil + ' rote Punkte)', rotAnteil > 300);
+
+  /* Zug animieren: Animation sofort beenden und Steine prüfen. */
+  function coordsAfter(moveIdx) {
+    var before = {};
+    for (var a = 0; a < view.cubies.length; a++) {
+      var c = view.cubies[a];
+      before[c.x + ',' + c.y + ',' + c.z] = c;
+    }
+    view.applyMove(moveIdx, { duration: 1 });
+    view.step();                                   // Zug starten
+    view.turn.t0 = -1e7;                           // fertig rechnen
+    view.step();                                   // abschließen
+    var bewegt = 0;
+    for (var b = 0; b < view.cubies.length; b++) {
+      var k = view.cubies[b];
+      var alt = before[k.x + ',' + k.y + ',' + k.z];
+      if (!alt || alt !== k) bewegt++;
+    }
+    return bewegt;
+  }
+  var u = coordsAfter(C.moveIndex('U', 1));
+  T.log('U bewegt 8 Steine der oberen Ebene (Flächenmittel bleibt)', u === 8);
+  var d = coordsAfter(C.moveIndex('D', 2));
+  T.log('D2 bewegt 8 Steine der unteren Ebene', d === 8);
+
+  // Drehungen bleiben exakt (keine Drift durch die Animation)
+  var genau = true, probe = new THREE.Matrix4();
+  for (var g = 0; g < view.cubies.length; g++) {
+    var cc = view.cubies[g];
+    if (Math.round(cc.x) !== cc.x || Math.round(cc.y) !== cc.y || Math.round(cc.z) !== cc.z) genau = false;
+    probe.makeRotationFromQuaternion(cc.group.quaternion);
+    for (var m = 0; m < 16; m++) {
+      if (Math.abs(probe.elements[m] - Math.round(probe.elements[m])) > 1e-4) genau = false;
+    }
+  }
+  T.log('Steinpositionen und -drehungen exakt', genau);
+
+  /* Maus-Drehung: Achse, Ebene und Vorzeichen für jede Trefferkombination */
+  function rot(moveIdx, v) {
+    var M = C.ROTATIONS[C.MOVE_ROT[moveIdx]];
+    return {
+      x: M.x.x * v.x + M.y.x * v.y + M.z.x * v.z,
+      y: M.x.y * v.x + M.y.y * v.y + M.z.y * v.z,
+      z: M.x.z * v.x + M.y.z * v.y + M.z.z * v.z
+    };
+  }
+  function gleich(a, b) { return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.z - b.z) < 1e-6; }
+
+  var dragFehler = 0, dragFaelle = 0;
+  for (var fn = 0; fn < 6; fn++) {
+    var n = new THREE.Vector3(C.NORMAL[fn].x, C.NORMAL[fn].y, C.NORMAL[fn].z);
+    for (var fb = 0; fb < 6; fb++) {
+      var b = new THREE.Vector3(C.NORMAL[fb].x, C.NORMAL[fb].y, C.NORMAL[fb].z);
+      if (Math.abs(b.dot(n)) > 0.01) continue;             // nur Richtungen in der Fläche
+      var quer = new THREE.Vector3().copy(n).cross(b);
+      for (var s = -1; s <= 1; s += 2) {
+        var cubie = {
+          x: n.x + s * quer.x, y: n.y + s * quer.y, z: n.z + s * quer.z
+        };
+        var chosen = view.turnAxisFor(n, cubie, b.clone());
+        if (!chosen) { dragFehler++; T.info('kein Zug für Fläche ' + C.FACES[fn] + ' Richtung ' + C.FACES[fb]); continue; }
+        var moveIdx = view.moveForTurn(chosen, Math.PI / 2);
+        dragFaelle++;
+        // 1) Der gefundene Zug dreht die gezogene Fläche in Zugrichtung
+        if (!gleich(rot(moveIdx, C.NORMAL[fn]), C.NORMAL[fb])) {
+          dragFehler++;
+          T.info('falsche Richtung: ' + C.FACES[fn] + ' nach ' + C.FACES[fb] +
+                 ' ergab ' + C.MOVE_NAMES[moveIdx]);
+        }
+        // 2) Der gefundene Zug dreht genau die getroffene Ebene
+        var face = C.MOVE_FACE[moveIdx];
+        if (cubie.x * C.NORMAL[face].x + cubie.y * C.NORMAL[face].y + cubie.z * C.NORMAL[face].z !== 1) {
+          dragFehler++;
+          T.info('falsche Ebene: ' + C.FACES[fn] + ' nach ' + C.FACES[fb] +
+                 ' ergab ' + C.MOVE_NAMES[moveIdx]);
+        }
+      }
+    }
+  }
+  T.log('Maus-Drehung: ' + dragFaelle + ' Trefferkombinationen, Zug und Ebene stimmen',
+        dragFehler === 0 && dragFaelle === 48);
+
+  // Der Flächenmittelstein einer Ebene lässt sich per Zug nicht drehen
+  var mittig = view.turnAxisFor(new THREE.Vector3(0, 1, 0), { x: 0, y: 1, z: 0 }, new THREE.Vector3(1, 0, 0));
+  T.log('Flächenmittelpunkt ergibt keinen Zug', mittig === null);
+
+  T.done();
+})();
+</script>
+</body>
+</html>

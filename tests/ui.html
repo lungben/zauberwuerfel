@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><style>body{font:16px/1.4 monospace;margin:10px;white-space:pre}</style></head>
+<body>
+<div id="out">läuft…</div>
+
+<!-- gleiche Elementnamen wie index.html, damit dieselbe Steuerung getestet wird -->
+<div id="banner" class="versteckt"></div>
+<h2 id="phasen-titel"></h2><p id="phasen-text"></p><p id="schritt-info"></p>
+<div id="scramble"></div>
+<div id="fortschritt"></div><p id="fortschritt-text"></p><p id="plan-info"></p>
+<span id="zaehler-manuell"></span><span id="zaehler-loesung"></span><span id="zaehler-gesamt"></span>
+<button id="auto"></button>
+<button id="mischen"></button><button id="loesen"></button><button id="zuruecksetzen"></button>
+<button id="schritt-vorwaerts"></button><button id="schritt-rueckwaerts"></button>
+<select id="geschwindigkeit"><option value="1">1</option></select>
+<div id="zug-buttons"></div>
+<div id="flaechen-farben"></div>
+<select id="farb-voreinstellung"></select><p id="farben-namen"></p>
+<button data-modus="lbl"></button><button data-modus="profi"></button>
+
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/color-scheme.js"></script>
+<script src="../js/scramble.js"></script>
+<script src="../js/solver-common.js"></script>
+<script src="../js/solver-twophase.js"></script>
+<script src="../js/solver-lbl.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+/* Steuerung ohne WebGL: Die Ansicht wird durch ein Attrappe ersetzt. */
+(function () {
+  var C = ZW.Cube;
+
+  var fake = {
+    moves: [],
+    applyMove: function (idx) { this.moves.push(idx); },
+    highlight: function () {}, setColors: function () {}, rebuild: function () {},
+    flush: function () {}, busy: function () { return false; }, resize: function () {}
+  };
+  ZW.Cube3D = { create: function () { return fake; }, SNAP: Math.PI / 4 };
+
+  TPsync();
+  function TPsync() {
+    ZW.TwoPhase.buildBasic();
+    ZW.TwoPhase.buildPermTables();
+    ZW.TwoPhase.buildFull(null, null, true);
+  }
+
+  var app = new ZW.App();
+  app.init();
+  app.tables.full = true;
+  app.tables.basic = true;
+
+  function fest(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function klemme(st) {
+    return JSON.stringify([Array.prototype.slice.call(st.cp), Array.prototype.slice.call(st.cr),
+                           Array.prototype.slice.call(st.ep), Array.prototype.slice.call(st.er)]);
+  }
+
+  /* Mischen setzt Zustand und Zähler zurück */
+  var alt = ZW.Scramble.randomMoves;
+  ZW.Scramble.randomMoves = function (n) { return alt(n, fest(11)); };
+  app.scrambleCube();
+  var gemischt = klemme(app.state);
+  T.log('Mischen würfelt und setzt die Zähler auf 0',
+        !C.isSolved(app.state) && app.counts.manual === 0 && app.counts.total === 0);
+  T.log('Scramble wird animiert (' + fake.moves.length + ' Züge)', fake.moves.length === 25);
+  ZW.Scramble.randomMoves = alt;
+
+  /* Lösung abspielen: vorwärts bis zum Ende */
+  app.mode = 'lbl';
+  app.solve();
+  T.log('Lösung geplant (' + (app.plan ? app.countMoves(app.plan.steps) + ' Züge' : 'keine') + ')',
+        !!app.plan);
+  var schritt = 0;
+  while (app.plan && app.plan.pos < app.plan.steps.length && schritt < 400) {
+    app.nextStep();
+    schritt++;
+  }
+  T.log('Vorwärts bis zum Ende gespielt (' + schritt + ' Schritte)', C.isSolved(app.state));
+  T.log('Zähler nach der Lösung: ' + app.counts.solver + ' Löseschritte',
+        app.counts.solver === schritt);
+
+  /* Zurückspielen: der Würfel steht wieder wie nach dem Mischen */
+  var zurueck = 0;
+  while (app.plan && app.plan.pos > 0 && zurueck < 500) {
+    var vorher_pos = app.plan.pos;
+    app.prevStep();
+    if (app.plan.pos === vorher_pos) break;
+    zurueck++;
+  }
+  T.log('Rückwärts bis zum Anfang gespielt (' + zurueck + ' Schritte)', zurueck === schritt);
+  T.log('Zustand nach dem Zurückspielen wie nach dem Mischen', klemme(app.state) === gemischt);
+
+  /* Züge per Taste/Button und die 2 für den halben Zug */
+  app.plan = null;
+  var vorher = app.counts.manual;
+  app.playMove(C.moveIndex('U', 1));
+  var nachU = app.counts.manual;
+  var doppel = app.handleDouble();
+  T.info('manuell vorher=' + vorher + ' nach U=' + nachU + ' nach 2=' + app.counts.manual +
+         ' (2 erkannt: ' + doppel + ')');
+  var basis = new C.State();
+  ZW.Scramble.applyTo(basis, alt(25, fest(11)));
+  C.applyMoveIdx(basis, C.moveIndex('U', 2));
+  T.log('Taste U und dann 2 ergibt U2', klemme(app.state) === klemme(basis));
+  T.log('U und 2 zählen als ein Zug', app.counts.manual - vorher === 1);
+
+  /* Manuelles Drehen verwirft die fertige Lösung */
+  app.solve();
+  var hattePlan = !!app.plan;
+  app.onManualMove(C.moveIndex('R', 1));
+  T.log('Eigener Drehung bricht die Lösung ab', hattePlan && !app.plan);
+
+  /* Profi-Modus liefert eine kurze Lösung und löst wirklich */
+  app.scrambleCube();
+  app.mode = 'profi';
+  app.solve();
+  var anzahl = app.plan ? app.countMoves(app.plan.steps) : 0;
+  var k2 = 0;
+  while (app.plan && k2 < 200) { app.nextStep(); k2++; }
+  T.log('Profi-Modus: ' + anzahl + ' Züge, Würfel danach gelöst', C.isSolved(app.state) && anzahl > 0);
+
+  /* Farbschema wird gespeichert und wirkt auf die Texte */
+  var neu = ['#ffffff', '#ff0000', '#00ff00', '#ffd500', '#0000ff', '#ff8800'];
+  for (var ci = 0; ci < 6; ci++) app.colorInputs[ci].value = neu[ci];
+  app.applyColors();
+  var namen = ZW.Scheme.names();
+  T.log('Farbschema gesetzt: ' + namen.join(','), namen[0] === 'weiß' && namen[3] === 'gelb');
+
+  T.done();
+})();
+</script>
+</body>
+</html>

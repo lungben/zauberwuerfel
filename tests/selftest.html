@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><style>body{font:16px/1.4 monospace;margin:10px;white-space:pre}</style></head>
+<body><div id="out">läuft…</div>
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/color-scheme.js"></script>
+<script src="../js/scramble.js"></script>
+<script src="../js/solver-common.js"></script>
+<script src="../js/solver-twophase.js"></script>
+<script src="../js/solver-lbl.js"></script>
+<script>
+/* Selbsttests: Identitäten, Scramble, beide Löser über viele Zufallswürfel. */
+(function () {
+  var C = ZW.Cube, SC = ZW.Scramble, TP = ZW.TwoPhase;
+
+  function alg(s) { return C.parseAlg(s); }
+  function isId(s) {
+    var st = new C.State();
+    C.applyMoves(st, alg(s));
+    return C.isSolved(st);
+  }
+  T.log('U4 ist das Nichts', isId("U U U U"));
+  T.log("U U' ist das Nichts", isId("U U'"));
+  T.log('U2 = U U', isId("U2 U' U'"));
+  T.log("(R U R' U') sechs mal ist das Nichts", isId("R U R' U' R U R' U' R U R' U' R U R' U' R U R' U' R U R' U'"));
+  T.log('U2 zweimal ist das Nichts', isId('U2 U2'));
+  T.log('R und L vertauschen nichts', isId("R L R' L'"));
+  T.log('T-Perm zweimal ist das Nichts',
+        isId("R U R' U' R' F R2 U' R' U' R U R' F' R U R' U' R' F R2 U' R' U' R U R' F'"));
+
+  function scrambled(n, rand) {
+    var res = SC.randomMoves(n, rand);
+    var st = new C.State();
+    SC.applyTo(st, res);
+    return { state: st, res: res };
+  }
+
+  /* Scramble: Länge, keine Wiederholungen derselben Fläche, keine Achse dreimal */
+  var bad = 0;
+  for (var s = 0; s < 200; s++) {
+    var res = SC.randomMoves(25);
+    if (res.moves.length !== 25) bad++;
+    for (var i = 0; i < res.moves.length; i++) {
+      var f = C.MOVE_FACE[res.moves[i]];
+      if (i > 0 && f === C.MOVE_FACE[res.moves[i - 1]]) bad++;
+      if (i > 1 && SC.axisOf(f) === SC.axisOf(C.MOVE_FACE[res.moves[i - 1]]) &&
+                   SC.axisOf(f) === SC.axisOf(C.MOVE_FACE[res.moves[i - 2]])) bad++;
+    }
+    var st = new C.State();
+    SC.applyTo(st, res);
+    if (C.isSolved(st)) bad++;
+  }
+  T.log('Scramble: 200 Folgen à 25 Züge, ohne redundante Züge', bad === 0);
+
+  /* Beide Löser über viele Zufallswürfel */
+  ZW.Scheme.load();
+  TP.buildBasic();
+  TP.buildPermTables();
+  TP.buildFull(null, null, true);
+  T.log('Tabellen gebaut', TP.tables.basicReady && TP.tables.fullReady);
+
+  var lblFails = 0, lblLen = [], lblMs = [];
+  for (var k = 0; k < 25; k++) {
+    var sc = scrambled(20, mulberry(k + 1));
+    var a = performance.now();
+    var plan = ZW.SolverLBL.solve(sc.state, {});
+    lblMs.push(Math.round(performance.now() - a));
+    if (!plan.ok) { lblFails++; continue; }
+    var n = 0, pruef = sc.state.clone();
+    for (var j = 0; j < plan.steps.length; j++) {
+      if (!plan.steps[j].move) continue;
+      n++;
+      C.applyMoveIdx(pruef, C.moveIndexOf(plan.steps[j].move));
+    }
+    if (!C.isSolved(pruef)) { lblFails++; T.info('Fall ' + k + ': Endzustand nicht gelöst'); }
+    lblLen.push(n);
+  }
+  stats('Lern-Löser', 25, lblFails, lblLen, lblMs);
+
+  var tpFails = 0, tpLen = [], tpMs = [];
+  for (var k2 = 0; k2 < 25; k2++) {
+    var sc2 = scrambled(20, mulberry(k2 + 1));
+    var b = performance.now();
+    var sol = TP.solve(sc2.state, { timeLimit: 5000 });
+    tpMs.push(Math.round(performance.now() - b));
+    if (!sol) { tpFails++; continue; }
+    var pruef2 = sc2.state.clone();
+    for (var q = 0; q < sol.moves.length; q++) C.applyMoveIdx(pruef2, sol.moves[q]);
+    if (!C.isSolved(pruef2)) { tpFails++; T.info('Profi Fall ' + k2 + ': Endzustand nicht gelöst'); }
+    tpLen.push(sol.moves.length);
+  }
+  stats('Profi-Löser', 25, tpFails, tpLen, tpMs);
+
+  /* Lösungstexte folgen dem gewählten Farbschema */
+  var farben = ZW.Scheme.names();
+  var beispiel = ZW.SolverLBL.solve(scrambled(12, mulberry(7)).state, {});
+  var text = '';
+  for (var t = 0; t < beispiel.steps.length; t++) text += (beispiel.steps[t].text || '') + ' ';
+  var trifft = 0;
+  for (var f = 0; f < 6; f++) if (text.indexOf(farben[f]) >= 0) trifft++;
+  T.log('Erklärtexte benutzen die gewählten Farbnamen (' + trifft + ' von 6)', trifft >= 3);
+
+  function stats(name, tries, fails, lens, times) {
+    lens.sort(function (x, y) { return x - y; });
+    times.sort(function (x, y) { return x - y; });
+    var sum = 0;
+    for (var i = 0; i < lens.length; i++) sum += lens[i];
+    T.log(name + ': ' + tries + ' Würfel, ' + fails + ' Fehler; Züge ' +
+          lens[0] + '/' + Math.round(sum / lens.length) + '/' + lens[lens.length - 1] +
+          '; ms ' + times[0] + '/' + times[Math.floor(times.length / 2)] + '/' + times[times.length - 1],
+          fails === 0);
+  }
+  function mulberry(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  T.done();
+})();
+</script>
+</body>
+</html>
