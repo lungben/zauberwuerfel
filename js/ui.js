@@ -142,11 +142,7 @@
 
   /** Tastatur/Buttons: Zug ausführen und animieren. */
   App.prototype.playMove = function (moveIdx) {
-    if (this.view && this.view.dragging()) {
-      // Mitten in einer Maus-Drehung würde die Zugreihenfolge durcheinanderkommen.
-      this.say('Lass die Maus-Drehung fertig werden, dann klappt es auch mit der Taste.', 'Einen Moment');
-      return;
-    }
+    if (this.blockedByDrag()) return;
     if (this.plan) this.dropPlan('Die Lösung ist verworfen, weil du selbst weitergedreht hast.');
     this.lastManual = { move: moveIdx, at: Date.now() };
     this.commit(moveIdx, 'manual', this.turnTime(210));
@@ -330,8 +326,17 @@
     }
   };
 
+  /** Eine laufende Maus-Drehung blockiert andere Züge: die Reihenfolge muss stimmen. */
+  App.prototype.blockedByDrag = function () {
+    if (this.view && this.view.dragging()) {
+      this.say('Lass die Maus-Drehung fertig werden, dann geht es weiter.', 'Einen Moment');
+      return true;
+    }
+    return false;
+  };
+
   App.prototype.prevStep = function () {
-    if (!this.plan) return;
+    if (!this.plan || this.blockedByDrag()) return;
     this.stopAuto();
     var i = this.plan.pos - 1;
     while (i >= 0 && !this.plan.steps[i].move) i--;
