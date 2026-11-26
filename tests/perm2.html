@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><style>body{font:16px/1.4 monospace;margin:10px;white-space:pre}</style></head>
+<body><div id="out">läuft…</div>
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/solver-twophase.js"></script>
+<script>
+(function () {
+  var C = ZW.Cube, TP = ZW.TwoPhase, T2 = TP.tables;
+  TP.buildBasic();
+  TP.buildPermTables();
+  TP.buildFull(null, null, true);
+  T.log('Tabellen bereit', T2.fullReady);
+
+  function check(alg, label) {
+    var st = new C.State();
+    C.applyMoves(st, C.parseAlg(alg));
+    var g1 = TP.inG1(st);
+    var gc = TP.g1Coords(st);
+    var cost = TP.phase1Cost(st);
+    var sol = TP.solvePermutation(st, 22);
+    var len = sol === null ? -1 : sol.length;
+    var solved = false;
+    if (sol) {
+      var fin = st.clone();
+      for (var i = 0; i < sol.length; i++) C.applyMoveIdx(fin, sol[i]);
+      solved = C.isSolved(fin);
+    }
+    T.info(label + ': inG1=' + g1 + ' cp=' + gc.cp + ' ep=' + gc.ep + ' sp=' + gc.sp +
+           ' cost=' + cost + ' Lösung=' + len + ' korrekt=' + solved);
+    return g1 && solved;
+  }
+
+  var ok = 0, n = 0;
+  n++; if (check("R U R' U' R' F R2 U' R' U' R U R' F'", 'T-Perm')) ok++;
+  n++; if (check("R U' R U R U R U' R' U' R2", 'U-Perm im Uhrzeigersinn')) ok++;
+  n++; if (check("R2 U R U R' U' R' U' R' U R'", 'U-Perm gegen den Uhrzeigersinn')) ok++;
+  n++; if (check("R' F R' B2 R F' R' B2 R2", 'A-Perm')) ok++;
+  n++; if (check("F R U' R' U' R U R' F' R U R' U' R' F R F'", 'Y-Perm')) ok++;
+  T.log('PLL-Fälle: ' + ok + '/' + n, ok === n);
+
+  // Pruning-Tabelle: sind Einträge für typische G1-Zustände erreichbar?
+  var st2 = new C.State();
+  C.applyMoves(st2, C.parseAlg("R U R' U' R' F R2 U' R' U' R U R' F'"));
+  var cp = C.cornerPermIndex(st2), ep = C.edgeUDPermIndex(st2), sp = C.slicePermIndex(st2);
+  T.info('cp=' + cp + ' ep=' + ep + ' sp=' + sp);
+  T.info('prCpSp=' + T2.prCpSp[cp * 24 + sp] + '  prEpSp=' + T2.prEpSp[ep * 24 + sp] +
+         '  prTwSe=' + T2.prTwSe[C.twistCoord(st2) * 495 + sp] +
+         '  prFlSe=' + T2.prFlSe[C.flipCoord(st2) * 495 + sp]);
+  T.done();
+})();
+</script>
+</body>
+</html>

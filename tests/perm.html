@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><style>body{font:16px/1.4 monospace;margin:10px;white-space:pre}</style></head>
+<body><div id="out">läuft…</div>
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/solver-twophase.js"></script>
+<script>
+(function () {
+  var C = ZW.Cube, TP = ZW.TwoPhase, T2 = TP.tables;
+
+  TP.buildBasic();
+  TP.buildPermTables();
+  TP.buildFull(null, null, true);
+  T.log('Tabellen bereit', T2.basicReady && T2.fullReady && !!T2.cpMove && !!T2.prCpSp);
+
+  /* 1) Übergangstabellen der Vertauschungs-Koordinaten gegen das Modell prüfen */
+  function rand(seed) { var r = seed; return function () { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; }; }
+  var rnd = rand(24);
+  function scramble(n, only) {
+    var st = new C.State(), last = -1;
+    for (var i = 0; i < n; i++) {
+      var m = Math.floor(rnd() * (only ? only.length : 18));
+      if (only) m = only[m];
+      if (last >= 0 && C.MOVE_FACE[m] === C.MOVE_FACE[last]) { i--; continue; }
+      last = m; C.applyMoveIdx(st, m);
+    }
+    return st;
+  }
+  var G1 = TP.G1_MOVES;
+
+  // Zustände in G1 erzeugen: nur G1-Züge
+  var bad = 0, checks = 0;
+  for (var t = 0; t < 10; t++) {
+    var st = scramble(8 + t, G1);
+    if (!TP.inG1(st)) { T.info('Zufalls-G1-Zustand ' + t + ' ist nicht in G1'); continue; }
+    var cp = C.cornerPermIndex(st), ep = C.edgeUDPermIndex(st), sp = C.slicePermIndex(st);
+    for (var g = 0; g < G1.length; g++) {
+      var s2 = st.clone();
+      C.applyMoveIdx(s2, G1[g]);
+      checks += 3;
+      if (T2.cpMove[g * 40320 + cp] !== C.cornerPermIndex(s2)) bad++;
+      if (T2.epMove[g * 40320 + ep] !== C.edgeUDPermIndex(s2)) bad++;
+      if (T2.spMove[g * 24 + sp] !== C.slicePermIndex(s2)) bad++;
+    }
+  }
+  T.log('Vertauschungs-Tabellen stimmen (' + checks + ' Prüfungen)', bad === 0);
+  if (bad) T.info('  Abweichungen: ' + bad);
+
+  /* 2) Pruning-Tabelle: Wertebereich und Konsistenz */
+  var unknown = 0, maxd = 0;
+  for (var i = 0; i < T2.prEpSp.length; i++) {
+    if (T2.prEpSp[i] === 255) unknown++;
+    else if (T2.prEpSp[i] > maxd) maxd = T2.prEpSp[i];
+  }
+  T.info('prEpSp: ' + unknown + ' unerreichbare Einträge, größte Tiefe ' + maxd);
+  T.log('prEpSp fast vollständig', unknown < 40320 * 24 * 0.02);
+
+  /* 3) Vertauschungssuche auf G1-Zuständen */
+  var fails = 0, lens = [], times = [];
+  for (var k = 0; k < 12; k++) {
+    var st3 = scramble(6 + k, G1);
+    if (!TP.inG1(st3)) { fails++; continue; }
+    var a = performance.now();
+    var sol = TP.solvePermutation(st3, 22);
+    times.push(Math.round(performance.now() - a));
+    if (sol === null) { fails++; T.info('Fall ' + k + ': keine Vertauschungslösung'); continue; }
+    var fin = st3.clone();
+    for (var q = 0; q < sol.length; q++) C.applyMoveIdx(fin, sol[q]);
+    if (!C.isSolved(fin)) {
+      fails++;
+      var nm = [];
+      for (var w = 0; w < sol.length; w++) nm.push(C.MOVE_NAMES[sol[w]]);
+      T.info('Fall ' + k + ': falsch: ' + nm.join(' '));
+    }
+    lens.push(sol.length);
+  }
+  lens.sort(function (x, y) { return x - y; });
+  times.sort(function (x, y) { return x - y; });
+  T.log('Vertauschung: 12 Fälle, ' + fails + ' Fehler, Längen ' + lens.join(',') +
+        ', ms ' + times.join(','), fails === 0);
+  T.done();
+})();
+</script>
+</body></html>
