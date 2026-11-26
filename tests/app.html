@@ -229,6 +229,124 @@
         Math.abs(erste.height - zweite.height) < 2 && Math.abs(zweite.height - 1250) < 2);
   pruefeRahmen('nach dem Vergrößern');
 
+  /* Modell und Ansicht: dieselben Züge müssen dieselbe Stellung ergeben.
+     Ab hier schrittelt der Test selbst, damit der Render-Loop nicht dazwischen funkt. */
+  view.disposed = true;
+  var st3 = new C.State();
+  T.log('Ansicht auf den gelösten Zustand gesetzt', view.syncToState(st3) && view.inSyncWith(st3));
+  function spieleZug(moveIdx) {
+    C.applyMoveIdx(st3, moveIdx);
+    view.applyMove(moveIdx, { duration: 1 });
+    for (var s = 0; s < 6 && (view.turn || view.queue.length); s++) {
+      if (view.turn) view.turn.t0 = -1e7;
+      view.step();
+    }
+  }
+  var folge = ['U', "R'", 'F2', 'D', "L'", 'B', 'U2', "B'"];
+  for (var fi = 0; fi < folge.length; fi++) spieleZug(C.moveIndexOf(folge[fi]));
+  T.log('Ansicht folgt dem Modell (' + folge.length + ' Züge)', view.inSyncWith(st3));
+
+  function drehung(rotIdx) {
+    var M = C.ROTATIONS[rotIdx], m = new THREE.Matrix4();
+    m.set(M.x.x, M.y.x, M.z.x, 0, M.x.y, M.y.y, M.z.y, 0, M.x.z, M.y.z, M.z.z, 0, 0, 0, 0, 1);
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+  }
+  function abweichungVon(zustand) {
+    var liste = view.targetsFrom(zustand);
+    if (!liste) return 'Zuordnung fehlt';
+    for (var i = 0; i < liste.length; i++) {
+      var z = liste[i], c = z.cubie;
+      var wink = c.group.quaternion.angleTo(drehung(z.rot));
+      if (c.x !== z.coord.x || c.y !== z.coord.y || c.z !== z.coord.z ||
+          Math.abs(c.group.position.x - z.coord.x) > 1e-3 ||
+          Math.abs(c.group.position.y - z.coord.y) > 1e-3 ||
+          Math.abs(c.group.position.z - z.coord.z) > 1e-3 || wink > 1e-3) {
+        return 'Heim ' + c.bx + ',' + c.by + ',' + c.bz + ' soll ' +
+               z.coord.x + ',' + z.coord.y + ',' + z.coord.z + ' ist ' +
+               c.x + ',' + c.y + ',' + c.z + ' (Gruppe ' + c.group.position.x + ',' +
+               c.group.position.y + ',' + c.group.position.z + ') Winkel ' + wink.toFixed(3);
+      }
+    }
+    return 'keine';
+  }
+
+  // Selbstheilung: vertauschte Steine fallen auf und werden ins Modell zurückgeholt
+  var zustand = st3;
+  view.handlers.getState = function () { return zustand; };
+  var c1 = view.cubies[0], c2 = view.cubies[1];
+  function versetze(c, ziel) {
+    c.x = ziel.x; c.y = ziel.y; c.z = ziel.z;
+    c.group.position.set(ziel.x, ziel.y, ziel.z);
+  }
+  var plaeze = [{ x: c1.x, y: c1.y, z: c1.z }, { x: c2.x, y: c2.y, z: c2.z }];
+  versetze(c1, plaeze[1]);
+  versetze(c2, plaeze[0]);
+  c1.group.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+  var kaputt = !view.inSyncWith(st3);
+  view.flush();                        // merkt die Verstellung und prüft beim nächsten Schritt
+  view.step();
+  var geheilt = view.inSyncWith(st3);
+  T.log('Vertauschte Steine fallen auf', kaputt);
+  T.log('Die Ansicht richtet sich selbst wieder am Modell aus', geheilt);
+
+  /* Echte Maus-Drehung, und mitten darin ein Warteschlangen-Zug auf derselben Ebene */
+  var st4 = new C.State();
+  view.syncToState(st4);
+  zustand = st4;
+  var gemeldet = null;
+  view.handlers.onUserMove = function (m) { gemeldet = m; };
+
+  var rechteck = view.canvas.getBoundingClientRect();
+  function schirm(p) {                       // Weltkoordinaten -> Bildschirmkoordinaten
+    var v = p.clone().project(view.camera);
+    return {
+      pointerId: 1,
+      clientX: rechteck.left + (v.x + 1) * 0.5 * rechteck.width,
+      clientY: rechteck.top + (1 - v.y) * 0.5 * rechteck.height
+    };
+  }
+  view.root.updateMatrixWorld(true);
+  var eck = null;
+  for (var e = 0; e < view.cubies.length; e++) {
+    var k = view.cubies[e];
+    if (k.x === 1 && k.y === 1 && k.z === 1) eck = k;
+  }
+  var oben = eck.group.localToWorld(new THREE.Vector3(0, 0.42, 0));   // Aufklebermitte oben
+  var anfang = schirm(oben);
+  var hit = view.pick(anfang);
+  T.log('Maus trifft die Oberseite des Ecksteins (1,1,1)',
+        !!hit && hit.normal.y === 1 && hit.cubie.x === 1 && hit.cubie.y === 1 && hit.cubie.z === 1);
+  view.drag = { cubie: hit.cubie, normal: hit.normal, point: hit.point,
+                axis: null, angle: 0, pivot: null, list: null };
+  view.updateDrag(schirm(oben.clone().add(new THREE.Vector3(0, 0, 1.3))));  // nach hinten ziehen
+  T.log('Maus-Drehung hält die Ebene am Dreh-Punkt',
+        !!view.activeLayer && view.pivot.children.length === view.activeLayer.length);
+
+  var zweiter = C.moveIndex('R', 2), dritter = C.moveIndex('F', 1);
+  view.applyMove(zweiter, { duration: 1 });              // Löser will dieselbe Ebene drehen
+  view.step();
+  T.log('Warteschlangen-Zug wartet, bis die Maus-Drehung fertig ist',
+        view.turn === null && view.queue.length === 1);
+  view.applyMove(dritter, { duration: 1 });              // und noch einer auf einer anderen Ebene
+  T.log('Während der Maus-Drehung ist die Ansicht beschäftigt', view.busy());
+
+  view.endDrag();
+  // Das Modell zieht genau in der Reihenfolge nach, in der die Ansicht spielt.
+  for (var s2 = 0; s2 < 14 && (view.turn || view.queue.length); s2++) {
+    if (view.turn) {
+      if (view.turn.move >= 0) C.applyMoveIdx(st4, view.turn.move);
+      view.turn.t0 = -1e7;
+    }
+    view.step();
+  }
+  var abweichung = abweichungVon(st4);
+  T.log('Modell und Ansicht spielen dieselbe Zugreihenfolge (' + C.MOVE_NAMES[gemeldet] +
+         ', ' + C.MOVE_NAMES[zweiter] + ', ' + C.MOVE_NAMES[dritter] + ')', abweichung === 'keine');
+  if (abweichung !== 'keine') T.info('Abweichung: ' + abweichung);
+  T.log('Maus-Drehung meldet einen Zug', gemeldet !== null);
+  T.log('Maus-Drehung und Warteschlange: Ansicht synchron, Dreh-Punkt leer',
+        gemeldet !== null && view.inSyncWith(st4) && view.pivot.children.length === 0);
+
   T.done();
 })();
 </script>

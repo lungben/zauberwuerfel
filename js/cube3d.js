@@ -79,6 +79,10 @@
     this.orbitDrag = null;
     this.highlighted = [];
     this.disposed = false;
+    // Zähler für ausgeführte Drehungen: nach jeder fertigsten Drehung wird die
+    // Ansicht einmal mit dem Modell verglichen (see step()).
+    this.serial = 0;
+    this.checkedSerial = -1;
 
     this.ray = new THREE.Raycaster();
     this.ndc = new THREE.Vector2();
@@ -175,6 +179,15 @@
     return out;
   };
 
+  /* Alle Steine, die noch im Dreh-Punkt hängen, wieder einhängen. */
+  Cube3D.prototype.clearPivot = function () {
+    var kinder = this.pivot.children;
+    for (var i = kinder.length - 1; i >= 0; i--) this.root.attach(kinder[i]);
+    this.pivot.quaternion.identity();
+    this.activeLayer = null;
+    this.activeAxis = null;
+  };
+
   /** Zug animieren (Zustand hat die App schon geändert). */
   Cube3D.prototype.applyMove = function (moveIdx, opts) {
     opts = opts || {};
@@ -182,9 +195,19 @@
     return this;
   };
   Cube3D.prototype.busy = function () {
-    return !!(this.turn || this.queue.length || (this.drag && this.drag.pivot));
+    // Auch eine laufende Maus-Drehung blockiert: sonst würfen sich Modell und
+    // Ansicht in eine andere Zugreihenfolge.
+    return !!(this.turn || this.queue.length || this.drag || this.activeLayer);
   };
-  Cube3D.prototype.flush = function () { this.queue.length = 0; };
+  /** Läuft gerade eine Drehung per Maus? */
+  Cube3D.prototype.dragging = function () { return !!this.drag; };
+  Cube3D.prototype.flush = function () {
+    this.queue.length = 0;
+    this.turn = null;
+    this.drag = null;
+    this.clearPivot();
+    this.serial++;                 // Ansicht muss wieder mit dem Modell verglichen werden
+  };
 
   Cube3D.prototype.startTurn = function (item) {
     var face = C.MOVE_FACE[item.move];
@@ -200,6 +223,7 @@
   };
 
   Cube3D.prototype.beginPivot = function (axis, list) {
+    this.clearPivot();                 // nichts von einer früheren Drehung hängen lassen
     this.pivot.rotation.set(0, 0, 0);
     this.pivot.quaternion.identity();
     this.activeAxis = axis;
@@ -207,14 +231,16 @@
     for (var i = 0; i < list.length; i++) this.pivot.attach(list[i].group);
   };
   Cube3D.prototype.setPivotAngle = function (angle) {
-    this.pivot.quaternion.setFromAxisAngle(this.activeAxis, angle);
+    if (this.activeAxis) this.pivot.quaternion.setFromAxisAngle(this.activeAxis, angle);
   };
   Cube3D.prototype.endPivot = function () {
-    // Steine zurückhängen und Nachkommastellen loswerden
-    for (var i = 0; i < this.activeLayer.length; i++) this.root.attach(this.activeLayer[i].group);
+    // Steine zurückhängen, Koordinaten und Drehungen wieder exakt machen
+    var liste = this.activeLayer || [];
+    for (var i = 0; i < liste.length; i++) this.root.attach(liste[i].group);
+    this.clearPivot();
     var m = new THREE.Matrix4();
-    for (var j = 0; j < this.activeLayer.length; j++) {
-      var cubie = this.activeLayer[j];
+    for (var j = 0; j < this.cubies.length; j++) {
+      var cubie = this.cubies[j];
       var p = cubie.group.position;
       cubie.x = Math.round(p.x); cubie.y = Math.round(p.y); cubie.z = Math.round(p.z);
       cubie.group.position.set(cubie.x, cubie.y, cubie.z);
@@ -222,7 +248,7 @@
       for (var k = 0; k < 16; k++) m.elements[k] = Math.round(m.elements[k]);
       cubie.group.quaternion.setFromRotationMatrix(m);
     }
-    this.activeLayer = null;
+    this.serial++;
   };
 
   /* --------------------------------------------------------- Ereignisse */
@@ -279,13 +305,14 @@
     });
 
     function finish(ev) {
-      if (!self.canvas.hasPointerCapture(ev.pointerId)) return;
-      self.canvas.releasePointerCapture(ev.pointerId);
+      if (self.canvas.hasPointerCapture(ev.pointerId)) self.canvas.releasePointerCapture(ev.pointerId);
+      // Eine Maus-Drehung beenden wir immer, auch wenn die Gefangennahme weg ist.
       if (self.drag) self.endDrag();
       self.orbitDrag = null;
     }
     canvas.addEventListener('pointerup', finish);
     canvas.addEventListener('pointercancel', finish);
+    canvas.addEventListener('lostpointercapture', finish);
 
     canvas.addEventListener('wheel', function (ev) {
       self.orbit.radius = Math.min(20, Math.max(4, self.orbit.radius + ev.deltaY * 0.01));
@@ -390,7 +417,9 @@
   /* --------------------------------------------------------- Animation */
 
   Cube3D.prototype.step = function () {
-    if (!this.turn && this.queue.length) this.startTurn(this.queue.shift());
+    // Während einer Maus-Drehung nichts aus der Warteschlange starten, sonst
+    // streiten sich Drag und Zug um dieselben Steine.
+    if (!this.turn && !this.activeLayer && this.queue.length) this.startTurn(this.queue.shift());
     if (this.turn) {
       var t = this.turn;
       var k = Math.min(1, (performance.now() - t.t0) / Math.max(1, t.duration));
@@ -403,6 +432,13 @@
         this.turn = null;
         if (this.handlers.onTurnDone) this.handlers.onTurnDone(t.move);
       }
+    } else if (this.handlers.getState && this.checkedSerial !== this.serial) {
+      // Sobald nichts mehr läuft: Ansicht mit dem Modell vergleichen und
+      // notfalls zurücksetzen. Sonst steht am Ende eine andere Stellung da,
+      // als Modell und Zähler melden.
+      this.checkedSerial = this.serial;
+      var zustand = this.handlers.getState();
+      if (zustand && !this.inSyncWith(zustand)) this.syncToState(zustand);
     }
     this.renderer.render(this.scene, this.camera);
   };
@@ -484,6 +520,84 @@
     }
     this.highlight([]);
     this.applyColors();
+    this.serial++;
+  };
+
+  /* ---------------------------------- Ansicht am Modell ausrichten */
+
+  // Heim-Coordinate -> Stein-Nummer im Modell
+  var CORNER_ID = Object.create(null), EDGE_ID = Object.create(null);
+  for (var ci = 0; ci < 8; ci++) {
+    var cc = C.CORNER_COORD[ci];
+    CORNER_ID[cc.x + ',' + cc.y + ',' + cc.z] = ci;
+  }
+  for (var ei = 0; ei < 12; ei++) {
+    var ec = C.EDGE_COORD[ei];
+    EDGE_ID[ec.x + ',' + ec.y + ',' + ec.z] = ei;
+  }
+
+  function quaternionOf(rotIdx) {
+    var M = C.ROTATIONS[rotIdx], m = new THREE.Matrix4();
+    m.set(M.x.x, M.y.x, M.z.x, 0,
+          M.x.y, M.y.y, M.z.y, 0,
+          M.x.z, M.y.z, M.z.z, 0,
+          0, 0, 0, 1);
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+  }
+
+  /** Ziel-Position und -Drehung jedes Steins, abgeleitet aus dem Modell. */
+  Cube3D.prototype.targetsFrom = function (state) {
+    var out = [];
+    for (var i = 0; i < this.cubies.length; i++) {
+      var cubie = this.cubies[i];
+      var key = cubie.bx + ',' + cubie.by + ',' + cubie.bz;
+      var id = CORNER_ID[key];
+      if (id !== undefined) {
+        var p = 0;
+        while (p < 8 && state.cp[p] !== id) p++;
+        if (p >= 8) return null;
+        out.push({ cubie: cubie, coord: C.CORNER_COORD[p], rot: state.cr[p] });
+        continue;
+      }
+      id = EDGE_ID[key];
+      if (id === undefined) continue;                 // Flächenmitte ruht immer
+      var q = 0;
+      while (q < 12 && state.ep[q] !== id) q++;
+      if (q >= 12) return null;
+      out.push({ cubie: cubie, coord: C.EDGE_COORD[q], rot: state.er[q] });
+    }
+    return out;
+  };
+
+  /** Deckt sich die Ansicht mit dem Modell? */
+  Cube3D.prototype.inSyncWith = function (state) {
+    var ziele = this.targetsFrom(state);
+    if (!ziele) return false;
+    for (var i = 0; i < ziele.length; i++) {
+      var z = ziele[i], c = z.cubie;
+      if (c.x !== z.coord.x || c.y !== z.coord.y || c.z !== z.coord.z) return false;
+      var p = c.group.position;
+      if (Math.abs(p.x - z.coord.x) > 1e-3 || Math.abs(p.y - z.coord.y) > 1e-3 ||
+          Math.abs(p.z - z.coord.z) > 1e-3) return false;
+      if (c.group.quaternion.angleTo(quaternionOf(z.rot)) > 1e-3) return false;
+    }
+    return true;
+  };
+
+  /** Ansicht zwangsweise auf den Modellzustand setzen (Selbstheilung). */
+  Cube3D.prototype.syncToState = function (state) {
+    this.turn = null;
+    this.drag = null;
+    this.clearPivot();
+    var ziele = this.targetsFrom(state);
+    if (!ziele) return false;
+    for (var i = 0; i < ziele.length; i++) {
+      var z = ziele[i], c = z.cubie;
+      c.group.position.set(z.coord.x, z.coord.y, z.coord.z);
+      c.group.quaternion.copy(quaternionOf(z.rot));
+      c.x = z.coord.x; c.y = z.coord.y; c.z = z.coord.z;
+    }
+    return true;
   };
 
   Cube3D.prototype.dispose = function () {

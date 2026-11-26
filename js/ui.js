@@ -48,7 +48,8 @@
       onUserMove: function (moveIdx) { self.onManualMove(moveIdx); },
       onDragStart: function (slots) { self.view.highlight(slots); },
       onDragCancel: function () { self.refreshHighlight(); },
-      onTurnDone: function () { self.afterTurn(); }
+      onTurnDone: function () { self.afterTurn(); },
+      getState: function () { return self.state; }   // die Ansicht prüft sich dagegen
     });
     if (!this.view) {
       el('banner').textContent = 'Diese Anzeige braucht WebGL. Der Würfel lässt sich ' +
@@ -141,6 +142,11 @@
 
   /** Tastatur/Buttons: Zug ausführen und animieren. */
   App.prototype.playMove = function (moveIdx) {
+    if (this.view && this.view.dragging()) {
+      // Mitten in einer Maus-Drehung würde die Zugreihenfolge durcheinanderkommen.
+      this.say('Lass die Maus-Drehung fertig werden, dann klappt es auch mit der Taste.', 'Einen Moment');
+      return;
+    }
     if (this.plan) this.dropPlan('Die Lösung ist verworfen, weil du selbst weitergedreht hast.');
     this.lastManual = { move: moveIdx, at: Date.now() };
     this.commit(moveIdx, 'manual', this.turnTime(210));
@@ -281,6 +287,22 @@
 
   App.prototype.nextStep = function () {
     if (!this.plan) return;
+    if (this.view && this.view.busy()) {
+      // Die Maus dreht gerade, oder eine Animation läuft noch: lieber kurz
+      // warten, sonst spielen Modell und Ansicht die Züge in verschiedener
+      // Reihenfolge und es steht etwas anderes da, als die Zähler melden.
+      var self = this;
+      this.waitWaits = (this.waitWaits || 0) + 1;
+      if (this.waitWaits > 30) {
+        this.waitWaits = 0;
+        this.stopAuto();
+        this.say('Auto-Play pausiert. Drehe fertig oder drücke noch einmal Auto-Play.', 'Pause');
+        return;
+      }
+      global.setTimeout(function () { self.nextStep(); }, 100);
+      return;
+    }
+    this.waitWaits = 0;
     var steps = this.plan.steps;
     while (this.plan.pos < steps.length && !steps[this.plan.pos].move) {
       // nur Informationstexte: anzeigen und weiterschieben

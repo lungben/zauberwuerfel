@@ -34,11 +34,12 @@
   var C = ZW.Cube;
 
   var fake = {
-    moves: [], lastHighlight: null,
+    moves: [], lastHighlight: null, dragBusy: false,
     applyMove: function (idx) { this.moves.push(idx); },
     highlight: function (list) { this.lastHighlight = list || []; },
     setColors: function () {}, rebuild: function () {},
-    flush: function () {}, busy: function () { return false; }, resize: function () {}
+    flush: function () {}, busy: function () { return false; }, resize: function () {},
+    dragging: function () { return this.dragBusy; }
   };
   ZW.Cube3D = { create: function () { return fake; }, SNAP: Math.PI / 4 };
 
@@ -83,6 +84,17 @@
   app.solve();
   T.log('Lösung geplant (' + (app.plan ? app.countMoves(app.plan.steps) + ' Züge' : 'keine') + ')',
         !!app.plan);
+  /* Mitten in einer Maus-Drehung: weder Taste noch Löser mischen sich vor */
+  var anfangDerLoesung = klemme(app.state);
+  var posAnfang = app.plan.pos;
+  fake.busy = function () { return fake.dragBusy; };
+  fake.dragBusy = true;
+  app.playMove(C.moveIndex('U', 1));
+  app.nextStep();
+  T.log('Während der Drehung bleiben Zug und Löser stehen',
+        app.plan.pos === posAnfang && klemme(app.state) === anfangDerLoesung);
+  fake.dragBusy = false;
+
   var schritt = 0;
   while (app.plan && app.plan.pos < app.plan.steps.length && schritt < 400) {
     app.nextStep();

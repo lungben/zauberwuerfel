@@ -28,7 +28,10 @@ Web Server, keine ES-Module, keine Web Workers).
 | ← → | ein Schritt zurück / weiter |
 
 Dreht man selbst am Würfel, während eine Lösung gezeigt wird, wird die Lösung
-verworfen — der Würfel hat sich ja geändert.
+verworfen — der Würfel hat sich ja geändert. Während eine eigene Maus-Drehung
+läuft, warten Auto-Play und Zug-Buttons: sonst würden Würfel und Zähler am Ende
+verschiedene Stellungen zeigen. Die Anzeige prüft sich nach jeder Drehung gegen
+das Modell und richtet sich bei Bedarf selbst wieder darauf aus.
 
 ## Die beiden Löser
 
