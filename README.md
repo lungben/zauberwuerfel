@@ -33,6 +33,38 @@ läuft, warten Auto-Play und Zug-Buttons: sonst würden Würfel und Zähler am E
 verschiedene Stellungen zeigen. Die Anzeige prüft sich nach jeder Drehung gegen
 das Modell und richtet sich bei Bedarf selbst wieder darauf aus.
 
+## Verteilen
+
+Alles in einer einzigen Datei:
+
+```
+./tools/bauen.py                     # schreibt dist/zauberwuerfel.html (rund 760 kB)
+```
+
+Das Skript ersetzt in `index.html` das Stylesheet und jedes `<script src="…">`
+durch dessen Inhalt. Reihenfolge und Programm bleiben unverändert, es wird nichts
+minimiert oder umgebaut. Die fertige Datei braucht weder Internet noch einen
+Ordner daneben und läuft per Doppelklick in Chrome und Firefox — sie kann also
+als Anhang geschickt oder auf einen USB-Stick gelegt werden. `dist/` ist nicht im
+Repository, die Datei ist ein Erzeugnis der Quelle.
+
+Ob das Bündeln etwas verändert, lässt sich mit derselben Technik nachprüfen:
+
+```
+./tools/bauen.py -s tests/selftest.html && ./tests/run.sh dist/pruef-selbst.html
+./tools/bauen.py -s tests/app.html      && ./tests/run.sh dist/pruef-app.html
+```
+
+Beides läuft genauso durch wie die aufgeteilten Seiten.
+
+Andere Wege:
+
+- **Ordner als Zip** — behält die aufgeteilten Dateien, gut zum Weiterlesen.
+  `index.html`, `css/`, `js/` und `vendor/` gehören zusammen hinein.
+- **Static Hosting** (GitHub Pages oder ein beliebiger Webserver) — die Ordner
+  hochladen, ein Bauen ist nicht nötig.
+
+
 ## Die beiden Löser
 
 **Lernen** (Voreinstellung) arbeitet nach der Anfängermethode in sechs Phasen:
