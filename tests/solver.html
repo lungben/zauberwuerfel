@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Löser-Test</title>
+<style>body { font: 17px/1.4 monospace; margin: 10px; white-space: pre; }</style>
+</head>
+<body>
+<div id="out">baut Tabellen…</div>
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/solver-common.js"></script>
+<script src="../js/solver-twophase.js"></script>
+<script src="../js/color-scheme.js"></script>
+<script src="../js/solver-lbl.js"></script>
+<script>
+(function () {
+  var C = ZW.Cube, TP = ZW.TwoPhase;
+
+  function scrambler(seed) {
+    var r = seed;
+    return function (n) {
+      var st = new C.State(), last = -1, out = [];
+      for (var i = 0; i < n; i++) {
+        r = (r * 1103515245 + 12345) & 0x7fffffff;
+        var m = (r >>> 8) % 18;
+        if (last >= 0 && C.MOVE_FACE[m] === C.MOVE_FACE[last]) { i--; continue; }
+        last = m;
+        out.push(m);
+        C.applyMoveIdx(st, m);
+      }
+      return { state: st, moves: out };
+    };
+  }
+  function nm(idx) {
+    var o = [];
+    for (var i = 0; i < idx.length; i++) o.push(typeof idx[i] === 'number' ? C.MOVE_NAMES[idx[i]] : idx[i]);
+    return o.join(' ');
+  }
+  function stats(arr) {
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    return a[0] + '/' + a[Math.floor(a.length / 2)] + '/' + a[a.length - 1];
+  }
+
+  var t0 = performance.now();
+  var cov = TP.buildBasic();
+  TP.buildPermTables();
+  var t1 = performance.now();
+  T.log('Basistabellen in ' + Math.round(t1 - t0) + ' ms ' +
+        '(twist ' + cov.twist + '/2187, flip ' + cov.flip + '/2048, slice ' + cov.slice + '/495)',
+        cov.twist === 2187 && cov.flip === 2048 && cov.slice === 495);
+
+  TP.buildFull(null, function () {
+    var t2 = performance.now();
+    T.log('Pruning-Tabellen in ' + Math.round(t2 - t1) + ' ms', TP.tables.fullReady);
+
+    var next = scrambler(20261125);
+
+    /* --- Profi-Löser (Zwei Phasen) --- */
+    var fails = 0, lens = [], times = [];
+    for (var k = 0; k < 20; k++) {
+      var sc = next(15 + k);
+      var a = performance.now();
+      var sol = TP.solve(sc.state, { timeLimit: 6000 });
+      times.push(Math.round(performance.now() - a));
+      if (!sol) { fails++; T.info('Profimodus: keine Lösung (Scramble ' + k + ')'); continue; }
+      var st = sc.state.clone();
+      for (var i = 0; i < sol.moves.length; i++) C.applyMoveIdx(st, sol.moves[i]);
+      if (!C.isSolved(st)) { fails++; T.info('Profimodus: Lösung falsch (Scramble ' + k + '): ' + nm(sol.moves)); }
+      lens.push(sol.moves.length);
+    }
+    T.log('Profimodus: 20 Würfel, ' + fails + ' Fehler; Zugzahl min/med/max ' + stats(lens) +
+          '; Zeit ms ' + stats(times), fails === 0);
+
+    /* --- Phase-2-Suche (nur Vertauschen) --- */
+    var p2fails = 0, p2len = [];
+    for (var g = 0; g < 12; g++) {
+      var sc2 = next(12);
+      var full = TP.solve(sc2.state, { timeLimit: 6000 });
+      if (!full) { p2fails++; continue; }
+      var mid = sc2.state.clone();
+      for (var q = 0; q < full.phase1; q++) C.applyMoveIdx(mid, full.moves[q]);
+      if (!TP.inG1(mid)) { p2fails++; T.info('Phase-1-Ziel liegt nicht in G1 (Fall ' + g + ')'); continue; }
+      var p2 = TP.solvePermutation(mid, 22);
+      if (p2 === null) { p2fails++; T.info('keine Vertauschungslösung (Fall ' + g + ')'); continue; }
+      var fin = mid.clone();
+      for (var w = 0; w < p2.length; w++) C.applyMoveIdx(fin, p2[w]);
+      if (!C.isSolved(fin)) { p2fails++; T.info('Vertauschung falsch (Fall ' + g + '): ' + nm(p2)); }
+      p2len.push(p2.length);
+    }
+    T.log('Vertauschung (Phase 2): 12 Fälle, ' + p2fails + ' Fehler; Zugzahlen ' + p2len.join(','), p2fails === 0);
+
+    /* --- Lern-Löser (Anfängermethode) --- */
+    var lblFails = 0, lblLens = [], lblTimes = [], errs = {};
+    for (var s = 0; s < 20; s++) {
+      var sc3 = next(10 + (s % 8));
+      var a3 = performance.now();
+      var plan = ZW.SolverLBL.solve(sc3.state, {});
+      lblTimes.push(Math.round(performance.now() - a3));
+      if (!plan.ok) {
+        lblFails++;
+        var e = (plan.error || 'unbekannt').replace(/Ecke [^ ]+|Kante [^ ]+/g, 'Stein');
+        errs[e] = (errs[e] || 0) + 1;
+        continue;
+      }
+      var st3 = sc3.state.clone();
+      var moveCount = 0;
+      for (var j = 0; j < plan.steps.length; j++) {
+        if (!plan.steps[j].move) continue;
+        moveCount++;
+        C.applyMoveIdx(st3, C.moveIndexOf(plan.steps[j].move));
+      }
+      if (!C.isSolved(st3)) { lblFails++; errs['Endzustand nicht gelöst'] = (errs['Endzustand nicht gelöst'] || 0) + 1; }
+      lblLens.push(moveCount);
+    }
+    T.log('Lern-Löser: 20 Würfel, ' + lblFails + ' Fehler; Züge min/med/max ' + stats(lblLens) +
+          '; Zeit ms ' + stats(lblTimes), lblFails === 0);
+    for (var key in errs) T.info('  Fehlerbild: ' + key + ' (' + errs[key] + '×)');
+
+    /* --- Beispielplan mit Texten anschauen --- */
+    var demo = next(18);
+    var plan2 = ZW.SolverLBL.solve(demo.state, { debug: true });
+    T.log('Beispielplan: ' + (plan2.ok ? 'gelöst' : 'fehlgeschlagen') +
+          ', ' + plan2.steps.length + ' Einträge, ' + plan2.notes.length + ' Macro-Schritte', plan2.ok);
+    for (var d = 0; d < Math.min(6, plan2.notes.length); d++) T.info('  ' + plan2.notes[d]);
+
+    T.done();
+  }, true);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8"><style>body{font:16px/1.4 monospace;margin:10px;white-space:pre}</style></head>
+<body><div id="out">läuft…</div>
+<script src="harness.js"></script>
+<script src="../js/cube-state.js"></script>
+<script src="../js/solver-common.js"></script>
+<script src="../js/solver-twophase.js"></script>
+<script src="../js/color-scheme.js"></script>
+<script src="../js/solver-lbl.js"></script>
+<script>
+(function () {
+  var C = ZW.Cube, TP = ZW.TwoPhase;
+  TP.buildBasic(); TP.buildPermTables(); TP.buildFull(null, null, true);
+
+  var r = 4242;
+  function scramble(n) {
+    var st = new C.State(), last = -1;
+    for (var i = 0; i < n; i++) {
+      r = (r * 1103515245 + 12345) & 0x7fffffff;
+      var m = (r >>> 8) % 18;
+      if (last >= 0 && C.MOVE_FACE[m] === C.MOVE_FACE[last]) { i--; continue; }
+      last = m; C.applyMoveIdx(st, m);
+    }
+    return st;
+  }
+
+  var t0 = performance.now();
+  var plan = ZW.SolverLBL.solve(scramble(15), { debug: true });
+  var t1 = performance.now();
+  T.info('ok=' + plan.ok + '  error=' + (plan.error || '—') + '  (' + Math.round(t1 - t0) + ' ms)');
+  for (var i = 0; i < plan.notes.length; i++) T.info('  ' + plan.notes[i]);
+
+  var fails = 0, lens = [], times = [], errs = {};
+  for (var k = 0; k < 12; k++) {
+    var st = scramble(8 + k);
+    var a = performance.now();
+    var p = ZW.SolverLBL.solve(st, {});
+    times.push(Math.round(performance.now() - a));
+    if (!p.ok) {
+      fails++;
+      var e = (p.error || '?').replace(/(Ecke|Kante) [^ ]+/g, 'Stein');
+      errs[e] = (errs[e] || 0) + 1;
+      continue;
+    }
+    var v = st.clone(), n = 0;
+    for (var j = 0; j < p.steps.length; j++) {
+      if (!p.steps[j].move) continue;
+      n++; C.applyMoveIdx(v, C.moveIndexOf(p.steps[j].move));
+    }
+    if (!C.isSolved(v)) { errs['Endzustand nicht gelöst'] = (errs['Endzustand nicht gelöst'] || 0) + 1; fails++; }
+    lens.push(n);
+  }
+  lens.sort(function (x, y) { return x - y; }); times.sort(function (x, y) { return x - y; });
+  T.log('Lern-Löser: 12 Würfel, ' + fails + ' Fehler; Züge ' + lens[0] + '/' +
+        lens[Math.floor(lens.length / 2)] + '/' + lens[lens.length - 1] + '; ms ' + times[0] + '/' +
+        times[Math.floor(times.length / 2)] + '/' + times[times.length - 1], fails === 0);
+  for (var key in errs) T.info('  Fehler: ' + key + ' (' + errs[key] + 'x)');
+  T.done();
+})();
+</script>
+</body></html>
