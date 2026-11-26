@@ -101,7 +101,7 @@ Die Testseiten sind ganz normale HTML-Dateien und laufen im Browser:
 tests/engine.html     Würfelmodell: Drehungen, Züge, Koordinaten, Identitäten
 tests/pieces.html     Stein-Suche und geschützte Zugfolgen
 tests/perm.html       Vertauschungs-Tabellen und -suche
-tests/perm2.html    PLL-Fälle gegen die Vertauschungssuche
+tests/perm2.html      PLL-Fälle gegen die Vertauschungssuche
 tests/solver.html     beide Löser über Zufallswürfel
 tests/lbl.html        Anfängermethode über 12 Würfel
 tests/selftest.html   Identitäten, Scramble, je 25 Würfel durch beide Löser
@@ -115,6 +115,10 @@ Für eine schnelle Kontrolle im Terminal:
 ```
 ./tests/run.sh tests/selftest.html "" 900    # legt einen Screenshot ab
 ```
+
+`tests/run.sh` prüft die Ergebnisse über den Text der Seite: Headless-Firefox
+fängt WebGL-Inhalt in Screenshots nicht ein, in `tests/app.html` werden die
+Bildpunkte deshalb direkt aus dem Grafikpuffer gelesen.
 
 ## Grenzen
 
