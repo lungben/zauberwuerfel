@@ -1,0 +1,39 @@
+# Baut die Einzelfall-Datei und stellt sie auf GitHub Pages.
+#
+# Pagesquelle ist der Zweig gh-pages (Wurzel): index.html ist dort die
+# gebaute Datei aus tools/bauen.py. Der Zweig wird bei jedem Lauf mit
+# einem einzigen Stand neu erzwungen - er enthält nie Geschichte.
+
+name: Bauen
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  bauen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Einzelfall-Datei bauen
+        run: python3 tools/bauen.py
+
+      - name: Auf gh-pages stellen
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ort=$(mktemp -d)
+          cp dist/zauberwuerfel.html "$ort/index.html"
+          git -C "$ort" init -q
+          git -C "$ort" config user.name  "github-actions[bot]"
+          git -C "$ort" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$ort" add index.html
+          git -C "$ort" commit -qm "Einzelfall-Datei $GITHUB_SHA"
+          git -C "$ort" push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            HEAD:refs/heads/gh-pages
+          echo "https://${GITHUB_REPOSITORY%/*}.github.io/${GITHUB_REPOSITORY#*/}/"
