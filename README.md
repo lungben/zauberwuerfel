@@ -163,3 +163,12 @@ Bildpunkte deshalb direkt aus dem Grafikpuffer gelesen.
   nicht schnell sein.
 * Die Mittelschicht lässt sich per Maus nicht drehen (dafür gibt es im Modell
   keine Züge); für solche Züge die Buttons oder die Tastatur benutzen.
+
+## Lizenz
+
+Der Code dieses Projekts steht unter der MIT-Lizenz (siehe [LICENSE](LICENSE)).
+
+Ausgenommen ist das mitgelieferte `vendor/three.min.js` (Three.js r158):
+ebenfalls MIT-lizenziert, Copyright (c) 2010-2023 Three.js Authors — der
+Lizennachweis steht unverändert in der Datei selbst. Auch in der per
+`tools/bauen.py` erzeugten Einzelfall-Datei bleibt er erhalten.
