@@ -86,8 +86,9 @@ def bewerte(seite, text):
     krach = [z for z in zeilen if z.startswith('!!!')]
     print('%-22s %4d OK, %d FAIL, %d FEHLER' % (seite.name, len(gelb),
                                                 len(falsch), len(krach)))
-    for zeile in falsch + krach:
-        print('    ' + zeile)
+    if falsch or krach or not zeilen:
+        for zeile in zeilen:                       # bei Fehlern alles zeigen,
+            print('    ' + zeile)                  # sonst fehlt die Diagnose
     if not zeilen:
         print('    FAIL  keine Ergebniszeilen - Seite lädt nicht oder '
               'Harness fehlt')
