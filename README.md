@@ -4,6 +4,9 @@ Ein echter 3D-Zauberwürfel (3×3) als HTML-Seite: drehen mit der Maus, mischen,
 Zugzähler und ein Löser, der in Schritten erklärt, was passiert. Die Seite läuft
 offline — einfach `index.html` per Doppelklick in Chrome oder Firefox öffnen.
 
+Online ausprobieren: **https://lungben.github.io/zauberwuerfel/** — das ist die
+per Actions gebaute Einzelfall-Datei, kein Web Server nötig.
+
 ## Start
 
 ```
@@ -47,6 +50,10 @@ minimiert oder umgebaut. Die fertige Datei braucht weder Internet noch einen
 Ordner daneben und läuft per Doppelklick in Chrome und Firefox — sie kann also
 als Anhang geschickt oder auf einen USB-Stick gelegt werden. `dist/` ist nicht im
 Repository, die Datei ist ein Erzeugnis der Quelle.
+
+Automatisch gebaut: Bei jedem Push auf `master` ruft GitHub Actions
+(`.github/workflows/bauen.yml`) das `tools/bauen.py` auf; die fertige Datei
+landet als `index.html` auf dem Zweig `gh-pages` und bildet die Projektseite.
 
 Ob das Bündeln etwas verändert, lässt sich mit derselben Technik nachprüfen:
 
