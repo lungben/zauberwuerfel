@@ -25,6 +25,7 @@
     },
     info: function (label) { out.push('  ·  ' + label); },
     done: render,
-    render: render
+    render: render,
+    lines: out   // alle Zeilen für Auswerter wie tests/ci.py ( screenshots bleiben seitenweise)
   };
 })(window);

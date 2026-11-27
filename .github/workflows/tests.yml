@@ -1,0 +1,26 @@
+# Die Testseiten (tests/*.html) headless in Firefox auswerten, siehe tests/ci.py.
+# Der Geckodriver ist auf den GitHub-Runnern mit Firefox vorinstalliert;
+# tests/ci.py startet ihn selbst, wenn er nicht schon läuft.
+
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testseiten:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Firefox und geckodriver prüfen
+        run: |
+          firefox --version
+          geckodriver --version | head -1
+
+      - name: Testseiten auswerten
+        run: python3 tests/ci.py

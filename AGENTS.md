@@ -23,6 +23,10 @@ by double-clicking `index.html` — tested in Chrome and Firefox.
 - Tests are HTML pages in `tests/`, opened in a browser. Headless terminal check:
   `./tests/run.sh tests/selftest.html "" 900` — args: page, URL hash, window
   height; writes a PNG under `$TMPDIR` (default `/tmp/opencode/`).
+- Full machine-readable run (exit 0/1): `python3 tests/ci.py [seite …]` — drives
+  headless Firefox through geckodriver (starts one if none listens on :4444) and
+  reads all result lines via `T.lines`. CI runs it on every push via
+  `.github/workflows/tests.yml`.
 - Syntax/runtime errors with line numbers: `python3 tests/debugjs.py js/cube-state.js …`
   (builds an inline debug page + screenshot in `/tmp/opencode/`).
 - There is no lint/typecheck/node-test command; verification = the test pages.

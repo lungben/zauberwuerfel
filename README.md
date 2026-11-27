@@ -162,6 +162,12 @@ Für eine schnelle Kontrolle im Terminal:
 fängt WebGL-Inhalt in Screenshots nicht ein, in `tests/app.html` werden die
 Bildpunkte deshalb direkt aus dem Grafikpuffer gelesen.
 
+Bei jedem Push laufen alle Seiten automatisch in GitHub Actions
+(`.github/workflows/tests.yml`): `python3 tests/ci.py` lädt sie in Headless-
+Firefox (Geckodriver), liest alle Ergebniszeilen über `T.lines` und meldet
+FAIL oder Seitenfehler über den Ausgangswert. Lokales Nachfahren:
+`python3 tests/ci.py tests/engine.html`.
+
 ## Grenzen
 
 * Die Zwei-Phasen-Suche ist nicht optimal; sie findet selten wirklich die kürzeste
