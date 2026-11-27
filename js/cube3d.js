@@ -614,6 +614,7 @@
       view.step();        // sofort ein Bild zeigen, nicht erst nach dem ersten Frame
       return view;
     } catch (e) {
+      if (global.T) T.info('create warf: ' + e.message);   // nur in Testseiten sichtbar
       return false;
     }
   }

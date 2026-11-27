@@ -39,8 +39,12 @@
   var view = ZW.Cube3D.create(document.getElementById('buehne'), {});
   T.log('WebGL-Ansicht erzeugt', !!view);
   if (!view) {
-    try { new THREE.WebGLRenderer({canvas: document.getElementById('buehne')}); }
-    catch (grund2) { T.info('Grund: ' + grund2.message); }
+    try {
+      var pruef = new THREE.WebGLRenderer({
+        canvas: document.createElement('canvas'), antialias: true});
+      pruef.dispose();
+      T.info('Renderer mit antialias allein möglich');
+    } catch (grund2) { T.info('Grund: ' + grund2.message); }
     T.done(); return;
   }
 
