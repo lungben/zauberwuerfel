@@ -1,5 +1,7 @@
 # Zauberwürfel · 3×3 im Browser
 
+[![Tests](https://github.com/lungben/zauberwuerfel/actions/workflows/tests.yml/badge.svg)](https://github.com/lungben/zauberwuerfel/actions/workflows/tests.yml)
+
 Ein echter 3D-Zauberwürfel (3×3) als HTML-Seite: drehen mit der Maus, mischen,
 Zugzähler und ein Löser, der in Schritten erklärt, was passiert. Die Seite läuft
 offline — einfach `index.html` per Doppelklick in Chrome oder Firefox öffnen.
@@ -163,9 +165,10 @@ fängt WebGL-Inhalt in Screenshots nicht ein, in `tests/app.html` werden die
 Bildpunkte deshalb direkt aus dem Grafikpuffer gelesen.
 
 Bei jedem Push laufen alle Seiten automatisch in GitHub Actions
-(`.github/workflows/tests.yml`): `python3 tests/ci.py` lädt sie in Headless-
-Firefox (Geckodriver), liest alle Ergebniszeilen über `T.lines` und meldet
-FAIL oder Seitenfehler über den Ausgangswert. Lokales Nachfahren:
+(`.github/workflows/tests.yml`): `python3 tests/ci.py` lädt sie in Firefox
+(Geckodriver, unter Xvfb — ohne DISPLAY-Pseudo-X gibt es in Headless-Firefox
+kein WebGL), liest alle Ergebniszeilen über `T.lines` und meldet FAIL oder
+Seitenfehler über den Ausgangswert. Lokales Nachfahren:
 `python3 tests/ci.py tests/engine.html`.
 
 ## Grenzen

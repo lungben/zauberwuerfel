@@ -26,7 +26,9 @@ by double-clicking `index.html` — tested in Chrome and Firefox.
 - Full machine-readable run (exit 0/1): `python3 tests/ci.py [seite …]` — drives
   headless Firefox through geckodriver (starts one if none listens on :4444) and
   reads all result lines via `T.lines`. CI runs it on every push via
-  `.github/workflows/tests.yml`.
+  `.github/workflows/tests.yml` — **under `xvfb-run`**: plain headless Firefox
+  on GitHub runners has no WebGL at all, so `tests/app.html` fails there
+  without a (virtual) X display backed by Mesa llvmpipe.
 - Syntax/runtime errors with line numbers: `python3 tests/debugjs.py js/cube-state.js …`
   (builds an inline debug page + screenshot in `/tmp/opencode/`).
 - There is no lint/typecheck/node-test command; verification = the test pages.
