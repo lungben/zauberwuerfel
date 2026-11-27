@@ -13,6 +13,7 @@ Ausgang 0, wenn jede Seite mindestens ein OK meldet und kein FAIL oder
 """
 
 import json
+import os
 import pathlib
 import shutil
 import socket
@@ -110,7 +111,9 @@ def main():
             'pageLoadStrategy': 'normal',
             'unhandledPromptBehavior': 'ignore',
             'moz:firefoxOptions': {
-                'args': ['-headless'],
+                # Mit DISPLAY (z. B. xvfb-run im CI) gibt es Software-WebGL
+                # über Mesa; ohne DISPLAY hilft nur der headless Modus.
+                'args': [] if os.environ.get('DISPLAY') else ['-headless'],
                 # Auf den CI-Läufern scheitert sonst die Inhaltssandkiste
                 # (Benutzer-Namensräume sind dort gesperrt) und WebGL fällt aus.
                 'env': {'MOZ_DISABLE_CONTENT_SANDBOX': '1',

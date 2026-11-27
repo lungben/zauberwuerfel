@@ -23,4 +23,6 @@ jobs:
           geckodriver --version | head -1
 
       - name: Testseiten auswerten
-        run: python3 tests/ci.py
+        # Xvfb statt rein headless: nur so gibt es im Läufer Software-WebGL
+        # (Mesa llvmpipe) für tests/app.html.
+        run: xvfb-run -a python3 tests/ci.py
