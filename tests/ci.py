@@ -114,6 +114,7 @@ def main():
                 # (Benutzer-Namensräume sind dort gesperrt) und WebGL fällt aus.
                 'env': {'MOZ_DISABLE_CONTENT_SANDBOX': '1',
                         'MOZ_DISABLE_GMP_SANDBOX': '1',
+                        'MOZ_DISABLE_GPU_SANDBOX': '1',
                         'LIBGL_ALWAYS_SOFTWARE': '1'},
                 'prefs': {'webgl.force-enabled': True,
                           'gfx.webrender.software': True}}}}})

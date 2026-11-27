@@ -32,9 +32,17 @@
 (function () {
   var C = ZW.Cube;
 
+  var grund = document.createElement('canvas');
+  var kontext = grund.getContext('webgl2') || grund.getContext('webgl');
+  if (!kontext) T.info('kein WebGL-Kontext direkt erfragbar');
+
   var view = ZW.Cube3D.create(document.getElementById('buehne'), {});
   T.log('WebGL-Ansicht erzeugt', !!view);
-  if (!view) { T.done(); return; }
+  if (!view) {
+    try { new THREE.WebGLRenderer({canvas: document.getElementById('buehne')}); }
+    catch (grund2) { T.info('Grund: ' + grund2.message); }
+    T.done(); return;
+  }
 
   T.log('26 Steine aufgebaut', view.cubies.length === 26);
   var stickers = 0;
