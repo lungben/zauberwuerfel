@@ -108,7 +108,15 @@ def main():
             'browserName': 'firefox',
             'pageLoadStrategy': 'normal',
             'unhandledPromptBehavior': 'ignore',
-            'moz:firefoxOptions': {'args': ['-headless']}}}})
+            'moz:firefoxOptions': {
+                'args': ['-headless'],
+                # Auf den CI-Läufern scheitert sonst die Inhaltssandkiste
+                # (Benutzer-Namensräume sind dort gesperrt) und WebGL fällt aus.
+                'env': {'MOZ_DISABLE_CONTENT_SANDBOX': '1',
+                        'MOZ_DISABLE_GMP_SANDBOX': '1',
+                        'LIBGL_ALWAYS_SOFTWARE': '1'},
+                'prefs': {'webgl.force-enabled': True,
+                          'gfx.webrender.software': True}}}}})
         sitzung = start['value']['sessionId']
         anfrage('POST', '/timeouts', sitzung,
                 {'pageLoad': WARTEN_MS, 'script': WARTEN_MS})
